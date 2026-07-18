@@ -152,6 +152,15 @@ function EditablePathTopology({
 
   const displayPaths = selectedPath!==null ? [simPaths[selectedPath]] : simPaths
 
+  // Edge keys that belong to the currently displayed path(s) — used to filter cost/IP labels
+  const activeEdgeKeys = useMemo(() => {
+    const s = new Set()
+    for (const p of displayPaths)
+      for (let i = 0; i < p.path.length - 1; i++)
+        s.add([p.path[i], p.path[i+1]].sort().join('|||'))
+    return s
+  }, [displayPaths])
+
   const allNodesSet = useMemo(() => {
     const s = new Set()
     // 1. nodes from computed paths
@@ -375,6 +384,7 @@ function EditablePathTopology({
           {showCost&&(()=>{
             const seen=new Set()
             return Object.entries(visEdges).map(([key,edge])=>{
+              if(!activeEdgeKeys.has(key)) return null
               if(seen.has(key)) return null; seen.add(key)
               const pa=pos[edge.a], pb=pos[edge.b]; if(!pa||!pb) return null
               const {x1,y1,x2,y2}=shortenLine(pa.x,pa.y,pb.x,pb.y)
@@ -488,6 +498,7 @@ function EditablePathTopology({
           {(()=>{
             const tips=[]
             if(showIPs) for(const [key,edge] of Object.entries(visEdges)){
+              if(!activeEdgeKeys.has(key)) continue
               const pa=pos[edge.a],pb=pos[edge.b]; if(!pa||!pb) continue
               const {x1,y1,x2,y2}=shortenLine(pa.x,pa.y,pb.x,pb.y)
               tips.push(edgeIpTooltip(key,edge,(x1+x2)/2,(y1+y2)/2))
