@@ -1,0 +1,1208 @@
+/* src/pages/ISISAnalyzer.css */
+
+.isis-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+
+/* ── Tabs ── */
+.isis-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 0 16px 0;
+  border-bottom: 1px solid var(--border, #eaedf3);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.isis-tab {
+  padding: 8px 18px;
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text-sub, #888);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.isis-tab:hover { background: var(--nav-hover, #f0f2fa); color: var(--text, #1a1a2e); }
+.isis-tab.active {
+  background: var(--accent-bg, #eef0fc);
+  color: var(--accent, #4858c8);
+  border-color: var(--accent, #4858c8);
+  font-weight: 600;
+}
+
+.isis-tab-badge {
+  font-size: 11px;
+  color: #16a34a;
+  background: #dcfce7;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.isis-refresh-wrap {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.isis-btn--refresh {
+  color: #0369a1;
+  border-color: #bae6fd;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.isis-btn--refresh:hover  { background: #f0f9ff; }
+.isis-btn--refresh.loading { opacity: 0.7; cursor: not-allowed; }
+
+.isis-refresh-msg {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.isis-refresh-msg.ok  { color: #16a34a; background: #dcfce7; }
+.isis-refresh-msg.err { color: #dc2626; background: #fee2e2; }
+
+/* ── Panel ── */
+.isis-panel { display: flex; flex-direction: column; gap: 16px; }
+.isis-panel--netmap { gap: 0; padding: 0; }
+
+/* ── Toolbar ── */
+.isis-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.isis-search {
+  flex: 1;
+  min-width: 200px;
+  padding: 9px 14px;
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 9px;
+  background: var(--surface, #fff);
+  color: var(--text, #1a1a2e);
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.isis-search:focus { border-color: var(--accent, #4858c8); }
+
+.isis-toolbar-right { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.isis-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border, #eaedf3);
+  background: var(--surface, #fff);
+  color: var(--text, #1a1a2e);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.isis-btn:hover { background: var(--nav-hover, #f0f2fa); }
+.isis-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.isis-btn--secondary { color: var(--accent, #4858c8); border-color: var(--accent, #4858c8); }
+.isis-btn--secondary:hover { background: var(--accent-bg, #eef0fc); }
+
+.isis-btn--green { color: #16a34a; border-color: #bbf7d0; }
+.isis-btn--green:hover { background: #f0fdf4; }
+
+.isis-btn--map { color: #6366f1; border-color: #c7d2fe; }
+.isis-btn--map:hover { background: #eef2ff; }
+.isis-btn--map.active { background: #eef2ff; border-color: #6366f1; font-weight: 600; }
+
+.isis-btn--primary {
+  background: var(--accent, #4858c8);
+  color: white;
+  border-color: var(--accent, #4858c8);
+}
+.isis-btn--primary:hover { background: #3a47b0; }
+
+/* ── Table ── */
+.isis-table-wrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid var(--border, #eaedf3);
+}
+
+.isis-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: var(--surface, #fff);
+}
+
+.isis-table th {
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted, #aaa);
+  letter-spacing: 0.06em;
+  background: var(--bg, #f4f6fb);
+  border-bottom: 1px solid var(--border, #eaedf3);
+  white-space: nowrap;
+}
+
+.isis-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border, #eaedf3);
+  color: var(--text, #1a1a2e);
+  vertical-align: middle;
+}
+
+.isis-table tr:last-child td { border-bottom: none; }
+.isis-table tr:hover td { background: var(--nav-hover, #f8f9fc); }
+
+.isis-empty { text-align: center; color: var(--text-muted, #aaa); padding: 32px !important; }
+
+.isis-hostname { font-weight: 600; font-size: 13px; }
+.isis-hostname.pe   { color: #0ea5e9; }
+.isis-hostname.core { color: var(--accent, #4858c8); }
+
+.isis-table code {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: var(--text-sub, #555);
+  background: var(--bg, #f4f6fb);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.isis-ip-badge {
+  display: inline-block;
+  font-family: 'Courier New', monospace;
+  font-size: 11.5px;
+  background: var(--bg, #f4f6fb);
+  color: var(--text-sub, #555);
+  border-radius: 5px;
+  padding: 2px 7px;
+  margin: 1px 2px;
+}
+
+.isis-sid {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 12px;
+  color: #7c3aed;
+  background: #f5f3ff;
+  padding: 2px 8px;
+  border-radius: 5px;
+}
+
+.isis-na { color: var(--text-muted, #aaa); }
+
+.isis-footer {
+  font-size: 12px;
+  color: var(--text-muted, #aaa);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.isis-source-badge {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+/* ── Path Form ── */
+.isis-path-form {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #eaedf3);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.isis-form-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.isis-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 160px;
+}
+
+.isis-form-field--sm { flex: 0 0 90px; min-width: 90px; }
+
+.isis-form-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub, #888);
+  letter-spacing: 0.04em;
+}
+
+.isis-form-field select,
+.isis-form-field input {
+  padding: 9px 12px;
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 8px;
+  background: var(--bg, #f4f6fb);
+  color: var(--text, #1a1a2e);
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.isis-form-field select:focus,
+.isis-form-field input:focus { border-color: var(--accent, #4858c8); }
+
+.isis-form-arrow {
+  font-size: 20px;
+  color: var(--text-muted, #aaa);
+  padding-bottom: 8px;
+  flex: 0;
+}
+
+.isis-btn--find { padding: 10px 22px; font-size: 14px; }
+
+.isis-error {
+  margin-top: 12px;
+  color: #dc2626;
+  font-size: 13px;
+  background: #fef2f2;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+/* ── Multi-path topology SVG ── */
+.isis-path-topo-wrap {
+  background: var(--surface, #fff);
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Path selector bar */
+.isis-path-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border, #eaedf3);
+  flex-wrap: wrap;
+}
+
+.isis-path-sel-btn {
+  padding: 5px 14px;
+  border-radius: 7px;
+  border: 1.5px solid var(--border, #dde2ef);
+  background: var(--surface, #fff);
+  color: var(--text-sub, #888);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.isis-path-sel-btn:hover { background: var(--nav-hover, #f0f2fa); }
+.isis-path-sel-btn.sel-all {
+  background: var(--accent-bg, #eef0fc);
+  color: var(--accent, #4858c8);
+  border-color: var(--accent, #4858c8);
+}
+
+.isis-path-sel-meta {
+  font-weight: 400;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.isis-path-sel-divider {
+  flex: 1;
+}
+
+.isis-cost-toggle {
+  color: var(--text-sub, #888);
+  border-color: var(--border, #dde2ef);
+}
+.isis-cost-toggle.cost-on {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #92400e;
+  font-weight: 600;
+}
+.isis-ip-toggle {
+  margin-left: auto;
+  color: var(--text-sub, #888);
+  border-color: var(--border, #dde2ef);
+}
+.isis-ip-toggle.ip-on {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #2563eb;
+}
+
+/* Scrollable SVG container */
+.isis-path-topo-scroll {
+  overflow: auto;
+  background: var(--bg, #f8f9fc);
+}
+
+/* Larger canvas when used inside the Network Map tab */
+.isis-netmap-wrap .isis-path-topo-scroll {
+  min-height: calc(100vh - 200px);
+  max-height: calc(100vh - 160px);
+}
+
+.isis-path-topo-svg {
+  display: block;
+  min-height: 180px;
+}
+
+.isis-path-topo-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border, #eaedf3);
+  flex-wrap: wrap;
+  background: var(--surface, #fff);
+}
+
+.isis-path-topo-legend-src,
+.isis-path-topo-legend-dst {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text, #1a1a2e);
+}
+
+.isis-path-topo-dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.isis-path-topo-legend-sep {
+  color: var(--border, #ddd);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.isis-path-topo-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.isis-path-topo-meta {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-sub, #888);
+}
+
+/* Hop table ip columns */
+.isis-hop-table code.ip-out { color: #2563eb; background: #eff6ff; }
+.isis-hop-table code.ip-in  { color: #7c3aed; background: #f5f3ff; }
+
+/* ── Path Results ── */
+.isis-path-results { display: flex; flex-direction: column; gap: 10px; }
+
+.isis-path-summary {
+  font-size: 13.5px;
+  color: var(--text-sub, #888);
+  padding: 4px 0;
+}
+
+.isis-path-card {
+  background: var(--surface, #fff);
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.isis-path-card.expanded { border-color: var(--accent, #4858c8); }
+
+.isis-path-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-wrap: wrap;
+}
+
+.isis-path-header:hover { background: var(--nav-hover, #f8f9fc); }
+
+.isis-path-num {
+  font-size: 12px;
+  font-weight: 700;
+  color: white;
+  background: var(--accent, #4858c8);
+  padding: 3px 10px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.isis-path-route {
+  font-size: 13px;
+  color: var(--text, #1a1a2e);
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.isis-path-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.isis-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+
+.isis-badge--metric { background: #fef3c7; color: #92400e; }
+.isis-badge--hop    { background: #e0e7ff; color: #3730a3; }
+
+.isis-expand-icon { font-size: 11px; color: var(--text-muted, #aaa); }
+
+/* ── Path Detail ── */
+.isis-path-detail {
+  padding: 16px 18px;
+  border-top: 1px solid var(--border, #eaedf3);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Hop chain visualization */
+.isis-hop-chain {
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  padding: 16px 4px 8px;
+  gap: 0;
+}
+
+.isis-hop-group {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.isis-hop-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg, #f4f6fb);
+  border: 2px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  padding: 8px 12px;
+  min-width: 100px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.isis-hop-node.src { border-color: #16a34a; background: #f0fdf4; }
+.isis-hop-node.dst { border-color: #dc2626; background: #fef2f2; }
+
+.isis-hop-name { font-size: 11.5px; font-weight: 700; color: var(--text, #1a1a2e); }
+.isis-hop-lb   { font-size: 10px; color: var(--text-muted, #aaa); font-family: monospace; margin-top: 2px; }
+.isis-hop-sid  { font-size: 10px; color: #7c3aed; font-weight: 600; margin-top: 2px; }
+
+/* Link segment between two routers */
+.isis-hop-link {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 130px;
+  max-width: 200px;
+  padding: 0 2px;
+}
+
+/* Two IP labels side by side above the line */
+.isis-hop-link-ips {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 0 4px 3px;
+}
+
+.isis-hop-link-ip-out,
+.isis-hop-link-ip-in {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 9px;
+  font-family: 'Courier New', monospace;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.isis-hop-link-ip-out { color: #2563eb; }
+.isis-hop-link-ip-in  { color: #7c3aed; }
+
+/* Small router-name tag chip */
+.isis-hop-link-rtag {
+  font-size: 7.5px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.isis-hop-link-rtag.out { background: #2563eb; color: #fff; }
+.isis-hop-link-rtag.in  { background: #7c3aed; color: #fff; }
+
+.isis-hop-link-ipval {
+  font-size: 9px;
+  font-family: 'Courier New', monospace;
+}
+
+.isis-hop-arr {
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.isis-hop-line {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  position: relative;
+  height: 20px;
+}
+
+.isis-hop-line::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 2px;
+  background: #94a3b8;
+}
+
+/* Arrowhead at end of link line */
+.isis-hop-line::after {
+  content: '';
+  position: absolute;
+  right: -1px; top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-left-color: #94a3b8;
+}
+
+.isis-hop-cost {
+  position: relative;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin: auto;
+  z-index: 1;
+}
+
+/* ERO block */
+.isis-ero-block {
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.isis-ero-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.isis-ero-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.isis-ero-entry {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.08);
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(74, 222, 128, 0.2);
+}
+
+/* Hop table */
+.isis-hop-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border, #eaedf3);
+}
+
+.isis-hop-table th {
+  padding: 8px 12px;
+  background: var(--bg, #f4f6fb);
+  color: var(--text-muted, #aaa);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #eaedf3);
+}
+
+.isis-hop-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border, #eaedf3);
+  color: var(--text, #1a1a2e);
+}
+
+.isis-hop-table tr:last-child td { border-bottom: none; }
+.isis-hop-table tr.row-src td { background: #f0fdf4; }
+.isis-hop-table tr.row-dst td { background: #fef2f2; }
+.isis-hop-table code {
+  font-family: monospace;
+  font-size: 11.5px;
+  color: var(--text-sub, #555);
+  background: var(--bg, #f4f6fb);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.isis-type-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+.isis-type-badge.strict { background: #e0e7ff; color: #3730a3; }
+.isis-type-badge.loose  { background: #fef3c7; color: #92400e; }
+
+/* ── Router show/hide IP + adjacency ── */
+.isis-show-btn {
+  padding: 4px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1.5px solid var(--border, #eaedf3);
+  background: var(--surface, #fff);
+  color: var(--accent, #4858c8);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.isis-show-btn:hover { background: var(--accent-bg, #eef0fc); }
+.isis-show-btn.open  {
+  background: var(--accent-bg, #eef0fc);
+  border-color: var(--accent, #4858c8);
+}
+
+.row-expanded td { background: var(--accent-bg, #eef0fc) !important; }
+.row-detail td   { padding: 0 !important; border-bottom: 2px solid var(--accent, #4858c8) !important; }
+
+.router-detail {
+  padding: 14px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--bg, #f8f9fc);
+}
+
+.router-detail-section { display: flex; flex-direction: column; gap: 8px; }
+
+.router-detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted, #aaa);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.router-detail-ips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Adjacency sub-table */
+.adj-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  background: var(--surface, #fff);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border, #eaedf3);
+}
+
+.adj-table th {
+  padding: 7px 12px;
+  background: var(--bg, #f4f6fb);
+  color: var(--text-muted, #aaa);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #eaedf3);
+}
+
+.adj-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border, #eaedf3);
+  color: var(--text, #1a1a2e);
+}
+
+.adj-table tr:last-child td { border-bottom: none; }
+.adj-table tr:hover td { background: var(--nav-hover, #f8f9fc); }
+
+.adj-table code {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--text-sub, #555);
+  background: var(--bg, #f4f6fb);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* ── Search highlight ── */
+.search-hl {
+  background: rgba(99, 102, 241, 0.13);
+  color: #4338ca;
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 800;
+  border-bottom: 1.5px solid rgba(99, 102, 241, 0.4);
+}
+
+/* Inside IP badge (blue bg) — pakai amber supaya kontras */
+.adj-link-ip .search-hl,
+.loopback-ip .search-hl {
+  background: #f59e0b;
+  color: #1c1917;
+  border-bottom: none;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* ── Loopback IP col ── */
+.loopback-ip {
+  font-family: 'Courier New', monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0c4a6e;
+  background: #bae6fd;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid #7dd3fc;
+  letter-spacing: 0.01em;
+}
+
+/* ── Neighbor count badge ── */
+.isis-nb-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  background: #ede9fe;
+  color: #6d28d9;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 0 6px;
+}
+
+/* ── Adjacency link-style rows ── */
+.adj-link-list {
+  padding: 10px 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: #f8faff;
+}
+
+.adj-link-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  transition: background 0.12s;
+}
+.adj-link-row:hover { background: #f1f5f9; }
+.adj-link-row--hl {
+  background: rgba(99, 102, 241, 0.06) !important;
+  border-left: 3px solid #6366f1;
+  padding-left: 5px;
+}
+
+.adj-lh {
+  min-width: 130px;
+  font-size: 12px;
+}
+
+.adj-link-colon {
+  color: #94a3b8;
+  margin: 0 6px;
+  font-weight: 600;
+}
+
+.adj-link-ip {
+  font-family: 'Courier New', monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0c4a6e;
+  background: #bae6fd;
+  padding: 3px 8px;
+  border-radius: 5px;
+  min-width: 110px;
+  text-align: center;
+  letter-spacing: 0.01em;
+  border: 1px solid #7dd3fc;
+}
+
+/* Center wire with cost */
+.adj-link-wire {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 80px;
+  max-width: 160px;
+  margin: 0 10px;
+}
+.adj-link-line-l,
+.adj-link-line-r {
+  flex: 1;
+  height: 1.5px;
+  background: #cbd5e1;
+}
+.adj-link-cost {
+  font-size: 11px;
+  font-weight: 800;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 5px;
+  padding: 1px 7px;
+  margin: 0 5px;
+  white-space: nowrap;
+}
+
+/* ── Loading / Error ── */
+.isis-loading {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-sub, #888);
+  font-size: 14px;
+}
+
+/* ── Router search with dropdown ── */
+.router-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.router-search-wrap label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub, #888);
+  letter-spacing: 0.04em;
+}
+
+.router-search-input {
+  padding: 9px 12px;
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 8px;
+  background: var(--bg, #f4f6fb);
+  color: var(--text, #1a1a2e);
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+
+.router-search-input:focus { border-color: var(--accent, #4858c8); }
+
+.router-search-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: var(--surface, #fff);
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  z-index: 100;
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 4px 0;
+}
+
+.router-search-dropdown li {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text, #1a1a2e);
+  cursor: pointer;
+  font-family: 'Courier New', monospace;
+  transition: background 0.1s;
+}
+
+.router-search-dropdown li:hover,
+.router-search-dropdown li.hl {
+  background: var(--accent-bg, #eef0fc);
+  color: var(--accent, #4858c8);
+}
+
+/* ── Topology adjacency title ── */
+.isis-topo-adj-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-sub, #888);
+  margin-top: 8px;
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
+}
+
+/* ── Network Map (full tab) ── */
+.isis-netmap-wrap {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+  background: var(--surface-alt, #f8f9fc);
+}
+
+/* Multi-select chip input */
+.isis-netmap-selector {
+  position: relative;
+  padding: 12px 16px 8px;
+  background: var(--surface, #fff);
+  border-bottom: 1px solid var(--border, #eaedf3);
+}
+.isis-netmap-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+}
+.isis-netmap-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #eef2ff;
+  color: #4858c8;
+  border: 1px solid #c7d2fe;
+  border-radius: 20px;
+  padding: 3px 10px 3px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+.isis-netmap-chip-x {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #818cf8;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+.isis-netmap-chip-x:hover { color: #4858c8; }
+.isis-netmap-search {
+  flex: 1;
+  min-width: 180px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text, #1a1a2e);
+  padding: 4px 2px;
+}
+.isis-netmap-clear {
+  background: none;
+  border: 1px solid #e2e8f0;
+  color: #94a3b8;
+  font-size: 11px;
+  border-radius: 20px;
+  padding: 3px 10px;
+  cursor: pointer;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.isis-netmap-clear:hover { background: #f1f5f9; color: #64748b; }
+.isis-netmap-dropdown {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 10px; right: 10px;
+  background: var(--surface, #fff);
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(72,88,200,0.10);
+  z-index: 100;
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 4px 0;
+}
+.isis-netmap-dropdown li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.isis-netmap-dropdown li:hover,
+.isis-netmap-dropdown li.hl { background: var(--accent-bg, #eef0fc); }
+.isis-netmap-adj-count {
+  font-size: 11px;
+  color: var(--text-sub, #94a3b8);
+  font-weight: 400;
+}
+.isis-netmap-hint {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-sub, #94a3b8);
+  font-size: 13px;
+  background: var(--surface, #fff);
+}
+.isis-netmap-info {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub, #64748b);
+}
+
+/* Legend row (reused for network map) */
+.isis-router-topo-legend {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border, #eaedf3);
+  background: var(--surface, #fff);
+  font-size: 12px;
+  color: var(--text-sub, #64748b);
+  flex-wrap: wrap;
+}
+.isis-router-topo-legend span { display: flex; align-items: center; gap: 5px; }
+.isis-topo-warn {
+  padding: 8px 14px;
+  font-size: 12px;
+  background: #fef9c3;
+  color: #854d0e;
+  border-bottom: 1px solid #fde68a;
+}
+.isis-topo-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted, #aaa);
+  font-size: 13px;
+}
+
+/* ── Topology SVG ── */
+.isis-topo-legend {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 12.5px;
+  color: var(--text-sub, #888);
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.isis-topo-legend span { display: flex; align-items: center; gap: 6px; }
+.isis-topo-note { margin-left: auto; font-size: 11.5px; color: var(--text-muted, #aaa); }
+
+/* Context menu (right-click on link) */
+.isis-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  min-width: 160px;
+  overflow: hidden;
+  animation: ctxFadeIn 0.1s ease;
+}
+@keyframes ctxFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.isis-ctx-header {
+  padding: 7px 14px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  border-bottom: 1px solid #334155;
+}
+.isis-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #e2e8f0;
+  text-align: left;
+  transition: background 0.12s;
+}
+.isis-ctx-item:hover { background: #334155; }
+.isis-ctx-item--danger { color: #f87171; }
+.isis-ctx-item--danger:hover { background: rgba(239,68,68,0.15); }
+
+.dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+}
+.dot.pe   { background: #0ea5e9; }
+.dot.core { background: #4858c8; }
+
+.isis-topo-wrap {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #eaedf3);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.isis-topo-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
