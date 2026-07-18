@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './Dashboard.css'
 import ISISAnalyzer from './ISISAnalyzer'
-
+import LSDBSimulator from './LSDBSimulator'
 // ─────────────────────────────────────────────
 // KONFIGURASI SIDEBAR — ganti sesuai kebutuhan
 // ─────────────────────────────────────────────
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   // { icon: '⊞', label: 'My Teams', path: '#' },
   // { icon: '🔔', label: 'Inbox', path: '#', badge: 6 },
   { icon: '🖧', label: 'ISIS Analyzer', path: '#' },
+  { icon: '⚗️', label: 'LSDB Simulator', path: '#' },  // ← tambah ini
 ]
 
 // Ganti stats sesuai data kamu
@@ -139,6 +140,7 @@ export default function Dashboard() {
         {/* Content */}
         <div className="db-content">
           {activeNav === 'ISIS Analyzer' && <ISISAnalyzer />}
+          {activeNav === 'LSDB Simulator'  && <LSDBSimulator />}  {/* ← tambah ini */}
         </div>
       </main>
     </div>

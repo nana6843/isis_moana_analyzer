@@ -2,6 +2,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import LSDBSimulator from './pages/LSDBSimulator'
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('access')
@@ -18,6 +19,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <Dashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/lsdb-simulator"
+          element={
+            <PrivateRoute>
+              <LSDBSimulator />
             </PrivateRoute>
           }
         />

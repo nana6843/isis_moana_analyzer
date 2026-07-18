@@ -1,0 +1,870 @@
+/* src/pages/LSDBSimulator.css */
+
+.sim-root {
+  display: flex;
+  flex-direction: column;
+  /* fill whatever height the parent gives (Dashboard content area) */
+  height: 100%;
+  font-family: 'Inter', -apple-system, sans-serif;
+  overflow-y: auto;
+}
+
+/* ── Topology viewport: fill one laptop screen ───────────────────────────────── *
+ *  Breakdown of what sits above the SVG:                                         *
+ *    sim-topbar       ≈ 42px                                                     *
+ *    sim-edit-toolbar ≈ 42px                                                     *
+ *    isis-path-form   ≈ 78px                                                     *
+ *    isis-path-summary≈ 36px                                                     *
+ *    isis-path-selector (inside topo-wrap) ≈ 44px                               *
+ *    Total ≈ 242px; +legend ≈ 38px below; leave 20px breathing room             *
+ * ─────────────────────────────────────────────────────────────────────────────── */
+.sim-root .isis-path-topo-scroll {
+  height: calc(100vh - 300px);
+  min-height: 380px;
+  overflow: auto;
+  flex: none !important;   /* override ISISAnalyzer's flex:1 so height is respected */
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────────────────── */
+.sim-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border, #eaedf3);
+  background: var(--surface, #fff);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.sim-topbar-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text, #1a1a2e);
+  white-space: nowrap;
+}
+.sim-topbar-counts {
+  font-size: 12px;
+  color: var(--text-sub, #64748b);
+  white-space: nowrap;
+}
+.sim-topbar-right {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Edit toolbar ────────────────────────────────────────────────────────────── */
+.sim-edit-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: var(--bg, #f4f6fb);
+  border-bottom: 1px solid var(--border, #eaedf3);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.sim-etb-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-sub, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 2px;
+}
+.sim-etb-btn {
+  padding: 5px 12px;
+  border-radius: 7px;
+  border: 1.5px solid var(--border, #dde2ef);
+  background: var(--surface, #fff);
+  color: var(--text-sub, #64748b);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.sim-etb-btn:hover { background: var(--nav-hover, #f0f2fa); }
+.sim-etb-btn--active {
+  background: var(--accent-bg, #eef0fc);
+  color: var(--accent, #4858c8);
+  border-color: var(--accent, #4858c8);
+  font-weight: 600;
+}
+.sim-etb-btn--link   { border-color: #bbf7d0; color: #15803d; }
+.sim-etb-btn--link:hover { background: #f0fdf4; }
+.sim-etb-btn--link.sim-etb-btn--active { background: #dcfce7; border-color: #16a34a; color: #14532d; }
+.sim-etb-btn--exist  { border-color: #bfdbfe; color: #1d4ed8; }
+.sim-etb-btn--exist:hover { background: #eff6ff; }
+.sim-etb-btn--edit   { border-color: #fde68a; color: #92400e; }
+.sim-etb-btn--edit:hover { background: #fffbeb; }
+.sim-etb-btn--router { border-color: #e9d5ff; color: #7c3aed; }
+.sim-etb-btn--router:hover { background: #faf5ff; }
+.sim-etb-sep {
+  width: 1px; height: 22px;
+  background: var(--border, #dde2ef);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+/* ── Results container ───────────────────────────────────────────────────────── */
+.sim-results {
+  display: flex;
+  flex-direction: column;
+  /* don't shrink — topology + cards + compare all stack and the page scrolls */
+  flex: none;
+}
+.isis-path-summary {
+  padding: 8px 18px;
+  font-size: 13px;
+  color: var(--text-sub, #64748b);
+  background: var(--surface, #fff);
+  border-bottom: 1px solid var(--border, #eaedf3);
+  flex-shrink: 0;
+}
+
+/* ── Additional legend class ─────────────────────────────────────────────────── */
+.isis-topo-note {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted, #aaa);
+  font-style: italic;
+}
+
+/* ── Path form (override for sim context) ────────────────────────────────────── */
+.isis-path-form {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border, #eaedf3);
+  background: var(--surface, #fff);
+  flex-shrink: 0;
+}
+.isis-error {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #dc2626;
+  background: #fef2f2;
+  border-radius: 7px;
+  padding: 6px 12px;
+}
+
+/* ── Restore btn ─────────────────────────────────────────────────────────────── */
+.sim-ep-restore {
+  display: block; width: calc(100% - 28px); margin: 0 14px 6px;
+  background: none; border: 1px solid #475569; border-radius: 6px;
+  color: #94a3b8; font-size: 11.5px; padding: 5px 8px; cursor: pointer; text-align: left;
+}
+.sim-ep-restore:hover { background: #334155; color: #e2e8f0; }
+.sim-ep-orig {
+  padding: 4px 14px 6px;
+  font-size: 11px; color: #64748b;
+}
+
+/* ── existing link hint in AddLinkDialog ─────────────────────────────────────── */
+.sim-modal-existing {
+  font-size: 12px;
+  color: #16a34a;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 7px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
+
+.sim-loading { padding: 48px; text-align: center; color: var(--text-sub, #888); }
+.sim-error   { padding: 16px; margin: 16px; border-radius: 9px; color: #dc2626; background: #fef2f2; font-size: 13px; }
+
+/* ── Tabs ───────────────────────────────────────────────────────────────────── */
+.sim-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 0 0 0;
+  border-bottom: 1px solid var(--border, #eaedf3);
+  background: var(--surface, #fff);
+  padding: 10px 16px 0;
+  flex-wrap: wrap;
+}
+
+.sim-tab {
+  padding: 8px 18px;
+  border: 1.5px solid var(--border, #eaedf3);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: var(--bg, #f4f6fb);
+  color: var(--text-sub, #888);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+  bottom: -1px;
+}
+.sim-tab:hover { background: var(--nav-hover, #f0f2fa); color: var(--text, #1a1a2e); }
+.sim-tab.active {
+  background: var(--surface, #fff);
+  color: var(--accent, #4858c8);
+  border-color: var(--border, #eaedf3);
+  border-bottom-color: var(--surface, #fff);
+  font-weight: 600;
+}
+
+.sim-diff-badge {
+  font-size: 11px;
+  color: #f59e0b;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 700;
+  margin-left: 6px;
+  margin-bottom: 1px;
+}
+
+.sim-edit-modes {
+  display: flex;
+  gap: 6px;
+  margin-left: 8px;
+  margin-bottom: 1px;
+}
+
+.sim-mode-btn {
+  padding: 5px 12px;
+  border-radius: 7px;
+  border: 1.5px solid var(--border, #dde2ef);
+  background: var(--surface, #fff);
+  color: var(--text-sub, #64748b);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.sim-mode-btn:hover { background: var(--nav-hover, #f0f2fa); }
+.sim-mode-btn.active {
+  background: var(--accent-bg, #eef0fc);
+  color: var(--accent, #4858c8);
+  border-color: var(--accent, #4858c8);
+  font-weight: 600;
+}
+
+.sim-tabs-right {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  margin-bottom: 1px;
+}
+
+.sim-tool-btn {
+  padding: 5px 12px;
+  border-radius: 7px;
+  border: 1.5px solid var(--border, #dde2ef);
+  background: var(--surface, #fff);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.sim-tool-btn--json  { color: #0ea5e9; border-color: #bae6fd; }
+.sim-tool-btn--json:hover  { background: #f0f9ff; }
+.sim-tool-btn--reset { color: #ef4444; border-color: #fecaca; }
+.sim-tool-btn--reset:hover { background: #fef2f2; }
+
+/* ── Diff bar ───────────────────────────────────────────────────────────────── */
+.sim-diff-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: #fffbeb;
+  border-bottom: 1px solid #fde68a;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.sim-diff-bar--clean {
+  background: #f0fdf4;
+  border-bottom-color: #bbf7d0;
+  color: #16a34a;
+  font-weight: 600;
+}
+.sim-diff-title { font-weight: 700; color: var(--text, #1a1a2e); }
+.sim-diff-chip { padding: 2px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; }
+.sim-diff-chip.added   { background: #dcfce7; color: #166534; }
+.sim-diff-chip.removed { background: #fee2e2; color: #991b1b; }
+.sim-diff-chip.changed { background: #fef3c7; color: #92400e; }
+
+/* ── Router selector ────────────────────────────────────────────────────────── */
+.sim-selector-wrap {
+  position: relative;
+  background: var(--surface, #fff);
+  border-bottom: 1px solid var(--border, #eaedf3);
+  padding: 10px 16px 8px;
+}
+.sim-selector-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+}
+.sim-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #eef2ff;
+  color: #4858c8;
+  border: 1px solid #c7d2fe;
+  border-radius: 20px;
+  padding: 3px 10px 3px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+.sim-chip-x {
+  background: none; border: none; cursor: pointer;
+  color: #818cf8; font-size: 14px; line-height: 1; padding: 0;
+}
+.sim-chip-x:hover { color: #4858c8; }
+.sim-selector-input {
+  flex: 1; min-width: 180px; border: none; outline: none;
+  background: transparent; font-size: 13px; color: var(--text, #1a1a2e); padding: 4px 2px;
+}
+.sim-selector-clear {
+  background: none; border: 1px solid #e2e8f0; color: #94a3b8;
+  font-size: 11px; border-radius: 20px; padding: 3px 10px; cursor: pointer; margin-left: auto;
+  white-space: nowrap;
+}
+.sim-selector-clear:hover { background: #f1f5f9; color: #64748b; }
+.sim-selector-dropdown {
+  position: absolute;
+  top: calc(100% - 2px); left: 10px; right: 10px;
+  background: var(--surface, #fff);
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(72,88,200,0.10);
+  z-index: 100; max-height: 220px; overflow-y: auto;
+  list-style: none; padding: 4px 0;
+}
+.sim-selector-dropdown li {
+  padding: 8px 14px; font-size: 13px; cursor: pointer; transition: background 0.1s;
+}
+.sim-selector-dropdown li:hover,
+.sim-selector-dropdown li.hl { background: var(--accent-bg, #eef0fc); }
+.sim-hn { font-weight: 600; font-family: 'Courier New', monospace; }
+.sim-hn.pe   { color: #0ea5e9; }
+.sim-hn.core { color: #4858c8; }
+
+/* ── RouterSearch typeahead ─────────────────────────────────────────────────── */
+.sim-rs-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sim-rs-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-sub, #94a3b8);
+  letter-spacing: 0.04em;
+}
+.sim-rs-input {
+  padding: 9px 12px;
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 8px;
+  background: var(--bg, #f4f6fb);
+  color: var(--text, #1a1a2e);
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.sim-rs-input:focus { border-color: var(--accent, #4858c8); }
+.sim-rs-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: var(--surface, #fff);
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  z-index: 200;
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 4px 0;
+}
+.sim-rs-dropdown li {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text, #1a1a2e);
+  cursor: pointer;
+  font-family: 'Courier New', monospace;
+  transition: background 0.1s;
+}
+.sim-rs-dropdown li:hover,
+.sim-rs-dropdown li.hl { background: var(--accent-bg, #eef0fc); color: var(--accent, #4858c8); }
+
+/* ── Import from path ────────────────────────────────────────────────────────── */
+.sim-import-toggle {
+  padding: 4px 12px;
+  border-radius: 7px;
+  border: 1.5px solid #c7d2fe;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.sim-import-toggle:hover, .sim-import-toggle.active {
+  background: #e0e7ff;
+  border-color: #6366f1;
+}
+
+.sim-import-panel {
+  margin-top: 8px;
+  background: var(--bg, #f8f9fc);
+  border: 1.5px solid #c7d2fe;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sim-import-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4338ca;
+}
+.sim-import-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sim-import-arrow {
+  font-size: 18px;
+  color: #94a3b8;
+  padding-bottom: 8px;
+  flex-shrink: 0;
+}
+.sim-import-err {
+  font-size: 12px;
+  color: #dc2626;
+  background: #fef2f2;
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+.sim-import-paths { display: flex; flex-direction: column; gap: 6px; }
+.sim-import-paths-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-sub, #64748b);
+}
+.sim-import-path-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: var(--surface, #fff);
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-wrap: wrap;
+}
+.sim-import-path-btn:hover {
+  border-color: var(--accent, #4858c8);
+  background: var(--accent-bg, #eef0fc);
+}
+.sim-import-path-metric {
+  font-size: 12px;
+  color: var(--text-sub, #64748b);
+  flex-shrink: 0;
+}
+.sim-import-path-route {
+  font-size: 11.5px;
+  font-family: 'Courier New', monospace;
+  color: var(--text-sub, #555);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Topology pane ──────────────────────────────────────────────────────────── */
+.sim-topo-wrap {
+  display: flex;
+  flex-direction: column;
+  /* don't grow/shrink — let the SVG scroll area define the height */
+  flex: none;
+  background: var(--surface, #fff);
+}
+
+.sim-topo-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border, #eaedf3);
+  background: var(--bg, #f4f6fb);
+  flex-shrink: 0;
+}
+.sim-topo-info { font-size: 12px; color: var(--text-sub, #64748b); flex: 1; }
+.sim-dl-btn {
+  background: none; border: 1px solid var(--border, #eaedf3);
+  border-radius: 6px; padding: 3px 10px; cursor: pointer;
+  font-size: 12px; color: var(--text-sub, #888);
+}
+.sim-dl-btn:hover { background: var(--nav-hover, #f0f2fa); }
+
+.sim-topo-scroll {
+  flex: 1; overflow: auto; background: var(--bg, #f8f9fc);
+}
+.sim-topo-svg { display: block; }
+
+.sim-topo-hint {
+  padding: 48px;
+  text-align: center;
+  color: var(--text-sub, #94a3b8);
+  font-size: 13px;
+  background: var(--surface, #fff);
+  flex: 1;
+}
+
+.sim-topo-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 7px 14px;
+  border-top: 1px solid var(--border, #eaedf3);
+  background: var(--surface, #fff);
+  font-size: 12px;
+  color: var(--text-sub, #64748b);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.sim-topo-legend span { display: flex; align-items: center; gap: 5px; }
+.sim-leg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.sim-topo-hint-text { margin-left: auto; font-size: 11.5px; color: var(--text-muted, #aaa); }
+
+/* ── Edge edit panel ────────────────────────────────────────────────────────── */
+.sim-edge-panel {
+  position: fixed; z-index: 9999;
+  background: #1e293b; border: 1px solid #334155;
+  border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.3);
+  width: 220px; overflow: hidden;
+  transform: translate(-50%, 10px);
+  animation: simPanelIn 0.12s ease;
+}
+@keyframes simPanelIn {
+  from { opacity: 0; transform: translate(-50%, 4px) scale(0.95); }
+  to   { opacity: 1; transform: translate(-50%, 10px) scale(1); }
+}
+.sim-edge-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px 8px; border-bottom: 1px solid #334155;
+  font-size: 12px; font-weight: 700; color: #94a3b8;
+}
+.sim-ep-close { background: none; border: none; color: #64748b; font-size: 16px; cursor: pointer; }
+.sim-ep-close:hover { color: #e2e8f0; }
+.sim-edge-panel-route {
+  padding: 6px 14px 8px; font-size: 11.5px; color: #e2e8f0;
+  font-family: 'Courier New', monospace; font-weight: 600; border-bottom: 1px solid #334155;
+}
+.sim-ep-label {
+  display: block; padding: 8px 14px 4px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; color: #64748b; text-transform: uppercase;
+}
+.sim-ep-input {
+  display: block; width: calc(100% - 28px); margin: 0 14px 10px;
+  padding: 7px 10px; background: #0f172a; border: 1.5px solid #475569;
+  border-radius: 7px; color: #e2e8f0; font-size: 14px; font-weight: 700; outline: none;
+}
+.sim-ep-input:focus { border-color: #6366f1; }
+.sim-ep-actions { display: flex; gap: 8px; padding: 8px 14px 12px; }
+.sim-ep-btn {
+  flex: 1; padding: 7px 10px; border-radius: 7px;
+  border: 1.5px solid #475569; background: #334155; color: #e2e8f0;
+  font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+}
+.sim-ep-btn:hover         { background: #475569; }
+.sim-ep-btn--save         { background: #4858c8; border-color: #6366f1; }
+.sim-ep-btn--save:hover   { background: #3730a3; }
+.sim-ep-btn--save:disabled { opacity: 0.5; cursor: not-allowed; }
+.sim-ep-btn--del          { background: #7f1d1d; border-color: #ef4444; color: #fca5a5; }
+.sim-ep-btn--del:hover    { background: #991b1b; }
+
+/* ── Modals ─────────────────────────────────────────────────────────────────── */
+.sim-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+.sim-modal {
+  background: #1e293b; border: 1px solid #334155; border-radius: 14px;
+  padding: 24px 28px; width: 320px; box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  display: flex; flex-direction: column; gap: 4px;
+  animation: simModalIn 0.15s ease;
+}
+@keyframes simModalIn {
+  from { opacity: 0; transform: scale(0.92) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.sim-modal-header { font-size: 15px; font-weight: 700; color: #e2e8f0; margin-bottom: 8px; }
+.sim-modal-route  { font-size: 13px; font-family: 'Courier New', monospace; color: #94a3b8; margin-bottom: 12px; background: #0f172a; padding: 6px 10px; border-radius: 6px; }
+.sim-modal-label  { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; color: #64748b; text-transform: uppercase; margin-top: 10px; margin-bottom: 4px; }
+.sim-modal-input  { width: 100%; box-sizing: border-box; padding: 8px 12px; background: #0f172a; border: 1.5px solid #475569; border-radius: 8px; color: #e2e8f0; font-size: 13.5px; outline: none; }
+.sim-modal-input:focus { border-color: #6366f1; }
+.sim-modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+
+/* ── Path compare panel ─────────────────────────────────────────────────────── */
+.sim-path-panel {
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 16px; flex: 1;
+}
+.sim-path-form {
+  display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #eaedf3);
+  border-radius: 12px; padding: 16px;
+}
+.sim-router-dd { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 180px; }
+.sim-router-dd label { font-size: 11.5px; font-weight: 600; color: var(--text-sub, #94a3b8); letter-spacing: 0.04em; }
+.sim-router-dd select {
+  padding: 9px 12px; border: 1.5px solid var(--border, #eaedf3); border-radius: 8px;
+  background: var(--bg, #f4f6fb); color: var(--text, #1a1a2e); font-size: 13px; outline: none;
+}
+.sim-router-dd select:focus { border-color: var(--accent, #4858c8); }
+.sim-path-arrow { font-size: 20px; color: #aaa; padding-bottom: 6px; flex: 0; }
+.sim-path-k { display: flex; flex-direction: column; gap: 5px; flex: 0 0 80px; }
+.sim-path-k label { font-size: 11.5px; font-weight: 600; color: var(--text-sub, #94a3b8); }
+.sim-path-k input {
+  padding: 9px 10px; border: 1.5px solid var(--border, #eaedf3); border-radius: 8px;
+  background: var(--bg, #f4f6fb); color: var(--text, #1a1a2e); font-size: 13px; outline: none;
+  width: 100%; box-sizing: border-box;
+}
+.sim-find-btn {
+  padding: 10px 22px; background: var(--accent, #4858c8); color: white;
+  border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; align-self: flex-end;
+}
+.sim-find-btn:hover    { background: #3a47b0; }
+.sim-find-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.sim-path-err { font-size: 13px; color: #dc2626; background: #fef2f2; border-radius: 7px; padding: 7px 12px; }
+
+/* sim-router-dd replaced by sim-rs-wrap */
+
+.sim-path-compare {
+  display: flex; gap: 0;
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 10px; overflow: hidden; flex: 1;
+}
+.sim-path-col    { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sim-path-col-header {
+  padding: 9px 14px; font-size: 12.5px; font-weight: 700;
+  border-bottom: 1.5px solid var(--border, #eaedf3);
+}
+.sim-path-col-header.original   { background: #f0f9ff; color: #0369a1; }
+.sim-path-col-header.simulation { background: #f0fdf4; color: #166534; }
+.sim-path-divider { width: 2px; background: var(--border, #eaedf3); flex-shrink: 0; }
+.sim-path-list {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px; background: var(--bg, #f8f9fc); flex: 1;
+}
+.sim-path-empty { padding: 24px; text-align: center; color: var(--text-muted, #aaa); font-size: 13px; }
+
+.sim-path-card {
+  background: var(--surface, #fff); border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 9px; padding: 10px 12px; transition: all 0.15s; cursor: default;
+}
+.sim-path-card:hover, .sim-path-hov { border-color: var(--accent, #4858c8); box-shadow: 0 0 0 3px rgba(72,88,200,0.08); }
+.sim-path-unique { border-color: #f59e0b; background: #fffbeb; }
+
+.sim-path-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.sim-path-num { font-size: 11px; font-weight: 700; color: white; background: #4858c8; padding: 2px 8px; border-radius: 5px; flex-shrink: 0; }
+.sim-path-metric { font-size: 12.5px; color: var(--text, #1a1a2e); }
+.sim-path-hops-badge { font-size: 11.5px; color: var(--text-muted, #aaa); flex: 1; }
+.sim-path-unique-badge { font-size: 10px; font-weight: 700; color: #92400e; background: #fef3c7; border: 1px solid #f59e0b; padding: 1px 7px; border-radius: 10px; }
+.sim-path-route { font-size: 12px; font-family: 'Courier New', monospace; color: var(--text-sub, #555); line-height: 1.5; word-break: break-all; }
+
+/* ── Usage label ─────────────────────────────────────────────────────────────── */
+.sim-usage-label { font-size: 11.5px; color: var(--text-sub, #64748b); }
+
+/* ── Read-only badge ─────────────────────────────────────────────────────────── */
+.sim-readonly-badge { color: #94a3b8 !important; font-style: italic; }
+
+/* ── Browser overlay (existing link/node/edit) ───────────────────────────────── */
+.sim-browser-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 10000;
+  display: flex; align-items: flex-start; justify-content: flex-end;
+  padding: 56px 24px 24px;
+}
+.sim-browser {
+  background: var(--surface, #fff);
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 14px;
+  width: 380px; max-width: 95vw;
+  max-height: calc(100vh - 80px);
+  display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  animation: simModalIn 0.15s ease;
+}
+.sim-browser-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--border, #eaedf3);
+  font-size: 13.5px; font-weight: 700; color: var(--text, #1a1a2e);
+}
+.sim-browser-subhead {
+  padding: 6px 18px;
+  font-size: 11.5px; color: var(--text-sub, #64748b);
+  border-bottom: 1px solid var(--border, #eaedf3);
+}
+.sim-browser-search {
+  margin: 10px 14px 0;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 8px;
+  background: var(--bg, #f4f6fb);
+  color: var(--text, #1a1a2e);
+  font-size: 13px; outline: none;
+}
+.sim-browser-search:focus { border-color: var(--accent, #4858c8); }
+.sim-browser-count {
+  padding: 5px 18px 3px;
+  font-size: 11px; color: var(--text-sub, #aaa);
+}
+.sim-browser-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 6px 8px 12px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.sim-browser-item {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  text-align: left; width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--border, #eaedf3);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  cursor: pointer; transition: all 0.12s;
+}
+.sim-browser-item:hover { background: var(--accent-bg, #eef0fc); border-color: var(--accent, #4858c8); }
+.sim-browser-item.sim-bi--changed { border-color: #fde68a; background: #fffbeb; }
+.sim-browser-item.sim-bi--added   { border-color: #bbf7d0; background: #f0fdf4; }
+.sim-bi-route    { font-family: 'Courier New', monospace; font-size: 12px; font-weight: 600; color: var(--text, #1a1a2e); flex: 1; }
+.sim-bi-hostname { font-family: 'Courier New', monospace; font-size: 12.5px; font-weight: 700; color: #4858c8; flex: 1; }
+.sim-bi-metric   { font-size: 11.5px; color: var(--text-sub, #64748b); flex-shrink: 0; }
+.sim-bi-ip       { font-family: 'Courier New', monospace; font-size: 10.5px; color: #94a3b8; flex-shrink: 0; }
+.sim-bi-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+.sim-bi-badge--changed { background: #fef3c7; color: #92400e; }
+.sim-bi-badge--added   { background: #dcfce7; color: #166534; }
+.sim-browser-empty { padding: 24px; text-align: center; color: var(--text-muted, #aaa); font-size: 13px; }
+
+/* ── Compare section ─────────────────────────────────────────────────────────── */
+.sim-compare-section {
+  background: var(--bg, #f4f6fb);
+  border-top: 2px solid var(--border, #eaedf3);
+  padding-bottom: 20px;
+}
+.sim-compare-header {
+  padding: 14px 20px 10px;
+  font-size: 14px; font-weight: 700;
+  color: var(--text, #1a1a2e);
+  border-bottom: 1px solid var(--border, #eaedf3);
+  background: var(--surface, #fff);
+}
+.sim-compare-sub-header {
+  padding: 12px 20px 8px;
+  font-size: 13px; font-weight: 600;
+  color: var(--text-sub, #334155);
+}
+
+/* Comparison table */
+.sim-compare-table-wrap {
+  overflow-x: auto;
+  padding: 12px 16px;
+}
+.sim-compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface, #fff);
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 12.5px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+}
+.sim-compare-table th {
+  padding: 9px 12px;
+  background: var(--bg, #f4f6fb);
+  color: var(--text-sub, #64748b);
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  border-bottom: 1.5px solid var(--border, #eaedf3);
+  text-align: left;
+}
+.sim-compare-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border, #f0f2f8);
+  vertical-align: middle;
+}
+.sim-compare-table tr:last-child td { border-bottom: none; }
+.sim-cmp-route { font-family: 'Courier New', monospace; font-size: 11.5px; max-width: 260px; word-break: break-word; }
+.sim-cmp-delta { white-space: nowrap; }
+
+/* Row highlight colors */
+.sim-cmp-row-better td:first-child { border-left: 3px solid #16a34a; }
+.sim-cmp-row-worse  td:first-child { border-left: 3px solid #dc2626; }
+.sim-cmp-row-rerouted td:first-child { border-left: 3px solid #f59e0b; }
+.sim-cmp-row-new    td:first-child { border-left: 3px solid #0ea5e9; }
+.sim-cmp-row-lost   td:first-child { border-left: 3px solid #94a3b8; }
+.sim-cmp-row-new  { background: #f0f9ff; }
+.sim-cmp-row-lost { background: #f8fafc; opacity: 0.7; }
+
+/* Delta badges */
+.sim-cmp-better { color: #16a34a; font-weight: 700; }
+.sim-cmp-worse  { color: #dc2626; font-weight: 700; }
+.sim-cmp-same   { color: #94a3b8; }
+.sim-cmp-badge {
+  display: inline-block;
+  font-size: 9.5px; font-weight: 700;
+  padding: 1px 7px; border-radius: 10px;
+  margin-left: 4px;
+}
+.sim-cmp-badge--new      { background: #dbeafe; color: #1e40af; }
+.sim-cmp-badge--lost     { background: #f1f5f9; color: #475569; }
+.sim-cmp-badge--rerouted { background: #fef3c7; color: #92400e; }
+
+/* Topo blocks inside compare */
+.sim-compare-topo-block {
+  background: var(--surface, #fff);
+  border-top: 2px solid var(--border, #eaedf3);
+  margin-top: 4px;
+}
+.sim-compare-topo-block--orig { border-top-color: #bfdbfe; }
+.sim-compare-topo-block--sim  { border-top-color: #bbf7d0; }
+
+.sim-compare-topo-label {
+  display: inline-block;
+  font-size: 9.5px; font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2px 8px; border-radius: 4px;
+  margin-right: 8px;
+}
+.sim-compare-topo-label--orig { background: #dbeafe; color: #1d4ed8; }
+.sim-compare-topo-label--sim  { background: #dcfce7; color: #166534; }
+
+.sim-compare-diff-inline {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-left: 10px;
+}
+/* re-use .sim-diff-chip from above */
