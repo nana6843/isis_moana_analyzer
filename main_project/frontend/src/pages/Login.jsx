@@ -30,11 +30,11 @@ export default function Login() {
 
   return (
     <div className="login-bg">
-      <span className="version-badge">● v26.5.18</span>
+      <span className="version-badge">● v19.7.2026</span>
 
       <div className="login-card">
-        <h1 className="login-heading">Pilih akun</h1>
-        <p className="login-sub">untuk melanjutkan sementara user: read_only / P4ssword!@#</p>
+        <h1 className="login-heading">WEB TCN</h1>
+        <p className="login-sub">MAPS — SR-MPLS & Adjacency Path Simulator</p>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="input-field">
@@ -64,7 +64,7 @@ export default function Login() {
         </form>
 
         <div className="login-note">
-          <strong>Note:</strong> Sementara pakai user dummy
+          <strong>Note:</strong> Login Using Your LADOMAIN
         </div>
       </div>
     </div>
