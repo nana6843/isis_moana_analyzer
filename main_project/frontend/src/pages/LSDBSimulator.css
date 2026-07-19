@@ -3,10 +3,18 @@
 .sim-root {
   display: flex;
   flex-direction: column;
-  /* fill whatever height the parent gives (Dashboard content area) */
   height: 100%;
+  width: 100%;
+  min-width: 0;
   font-family: 'Inter', -apple-system, sans-serif;
   overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sim-topo-wrap {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* ── Topology viewport: fill one laptop screen ───────────────────────────────── *
@@ -21,8 +29,9 @@
 .sim-root .isis-path-topo-scroll {
   height: calc(100vh - 300px);
   min-height: 380px;
+  width: 100%;
   overflow: auto;
-  flex: none !important;   /* override ISISAnalyzer's flex:1 so height is respected */
+  flex: none !important;
 }
 
 /* ── Top bar ─────────────────────────────────────────────────────────────────── */

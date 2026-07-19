@@ -133,6 +133,19 @@ function RouterSearch({ label, value, onChange, options }) {
 }
 
 // ─── Editable Path Topology ────────────────────────────────────────────────────
+// ─── Capacity badge color ──────────────────────────────────────────────────────
+function capColor(cap) {
+  if (!cap) return '#6b7280'
+  if (cap==='1600G') return '#7f1d1d'  // merah tua
+  if (cap==='800G')  return '#dc2626'  // merah
+  if (cap==='400G')  return '#ea580c'  // oranye
+  if (cap==='100G')  return '#7c3aed'  // ungu
+  if (cap==='40G')   return '#2563eb'  // biru
+  if (cap==='25G')   return '#0891b2'  // teal
+  if (cap==='10G')   return '#16a34a'  // hijau
+  return '#6b7280'                     // 1G atau tidak diketahui
+}
+
 function EditablePathTopology({
   simPaths, src, dst,
   simNodes, simEdges, origEdges,
@@ -143,12 +156,15 @@ function EditablePathTopology({
   editMode, addLinkSrc,
   onNodeDelete, onEdgeClick, onNodeClick,
   selectedPath, selectedMetric=null, showCost, showIPs,
+  wanData={}, showIntf=false, showDesc=false, showCap=false,
   origNodeCount=0,
 }) {
   const [posOverride, setPosOverride] = useState({})
   const [dragging, setDragging]       = useState(null)
   const [hovNode, setHovNode]         = useState(null)
   const [hovEdge, setHovEdge]         = useState(null)
+  const [hovDesc, setHovDesc]         = useState(null)   // {descA, descB, edgeA, edgeB, x, y}
+  const [pinnedDescs, setPinnedDescs] = useState({})    // key -> {descA, descB, edgeA, edgeB, x, y}
   const [pinnedEdges, setPinnedEdges] = useState(new Set())
   const svgRef = useRef()
 
@@ -238,6 +254,44 @@ function EditablePathTopology({
     return r
   }, [simEdges, allNodesSet, hiddenEdges])
 
+  // Normalize IP — strip /30 atau subnet lain jika ada
+  const normIp = ip => ip ? ip.split('/')[0].trim() : null
+
+  // WAN enrichment per edge: intf, description, capacity per side
+  // Matching dilakukan setelah normalize IP di kedua sisi
+  const wanInfo = useMemo(() => {
+    const result = {}
+    for (const [key, edge] of Object.entries(simEdges)) {
+      const wanA = wanData[edge.a] || []
+      const wanB = wanData[edge.b] || []
+      const ipA  = normIp(edge.ip_a)
+      const ipB  = normIp(edge.ip_b)
+      // cari entry yang cocok berdasarkan ip_clean (sudah di-normalize di backend)
+      const entA = ipA ? wanA.find(w => w.ip_clean === ipA) : null
+      const entB = ipB ? wanB.find(w => w.ip_clean === ipB) : null
+      // fallback: cari di semua hostname jika tidak ketemu di hostname yang diharapkan
+      const fallbackA = !entA && ipA
+        ? Object.values(wanData).flat().find(w => w.ip_clean === ipA)
+        : null
+      const fallbackB = !entB && ipB
+        ? Object.values(wanData).flat().find(w => w.ip_clean === ipB)
+        : null
+      const eA = entA || fallbackA
+      const eB = entB || fallbackB
+      result[key] = {
+        intf_a: eA?.intf        || null,
+        desc_a: eA?.description || null,
+        cap_a:  eA?.capacity    || null,
+        intf_b: eB?.intf        || null,
+        desc_b: eB?.description || null,
+        cap_b:  eB?.capacity    || null,
+        // capacity terbaik untuk badge di edge
+        capacity: eA?.capacity || eB?.capacity || null,
+      }
+    }
+    return result
+  }, [simEdges, wanData])
+
   // Visible neighbor count per node (only edges drawn in topology)
   const neighborCounts = useMemo(() => {
     const c = {}
@@ -298,12 +352,17 @@ function EditablePathTopology({
     img.src=url
   }
 
-  // IP tooltip
+  // IP tooltip — kotak hitam, hanya berisi IP + Metric
+  // Intf/Desc/Cap sudah ada di WAN info box terpisah
   const edgeIpTooltip = (key, edge, mx, my, pinned=false) => {
-    const lines = [{label:`↗ ${edge.a}`,val:edge.ip_a},{label:`↘ ${edge.b}`,val:edge.ip_b},{label:'Metric',val:edge.metric}]
-      .filter(l=>l.val!=null&&l.val!=='')
-    if (!lines.length) return null
-    const TW=215, TH=lines.length*18+14
+    const lines = []
+    lines.push({label:`↗ ${edge.a}`, val:edge.ip_a})
+    lines.push({label:`↘ ${edge.b}`, val:edge.ip_b})
+    lines.push({label:'Metric', val:edge.metric})
+
+    const filtered = lines.filter(l=>l.val!=null&&l.val!=='')
+    if (!filtered.length) return null
+    const TW=215, TH=filtered.length*18+14
     const tx=Math.min(Math.max(mx,TW/2+6),W-TW/2-6)
     const ty=my>H/2?my-TH-14:my+14
     const hdr=pinned?'#1e3a5f':'#334155'
@@ -316,7 +375,7 @@ function EditablePathTopology({
         <text x={tx} y={ty+14} textAnchor="middle" fontSize="9" fill="#94a3b8" fontWeight="700">
           {edge.a} → {edge.b}{pinned?' 📌':''}
         </text>
-        {lines.map((l,i)=>(
+        {filtered.map((l,i)=>(
           <g key={i}>
             <text x={tx-TW/2+10} y={ty+28+i*18} fontSize="8.5" fill="#94a3b8">{l.label}</text>
             <text x={tx+TW/2-8}  y={ty+28+i*18} textAnchor="end" fontSize="9"
@@ -376,6 +435,15 @@ function EditablePathTopology({
           onClick={()=>onNodeClick?.('__TOGGLE_COST__')}>{showCost?'📊 Hide Cost':'📊 Show Cost'}</button>
         <button className={`isis-path-sel-btn isis-ip-toggle ${showIPs?'ip-on':''}`}
           onClick={()=>onNodeClick?.('__TOGGLE_IP__')}>{showIPs?'🔵 Hide IPs':'⚪ Show IPs'}</button>
+        <button className={`isis-path-sel-btn ${showIntf?'cost-on':''}`}
+          style={showIntf?{background:'#ede9fe',borderColor:'#7c3aed',color:'#6d28d9'}:{}}
+          onClick={()=>onNodeClick?.('__TOGGLE_INTF__')}>{showIntf?'🔌 Hide Intf':'🔌 Show Intf'}</button>
+        <button className={`isis-path-sel-btn ${showDesc?'cost-on':''}`}
+          style={showDesc?{background:'#fef3c7',borderColor:'#d97706',color:'#92400e'}:{}}
+          onClick={()=>onNodeClick?.('__TOGGLE_DESC__')}>{showDesc?'📝 Hide Desc':'📝 Show Desc'}</button>
+        <button className={`isis-path-sel-btn ${showCap?'cost-on':''}`}
+          style={showCap?{background:'#dcfce7',borderColor:'#16a34a',color:'#14532d'}:{}}
+          onClick={()=>onNodeClick?.('__TOGGLE_CAP__')}>{showCap?'⚡ Hide Cap':'⚡ Show Cap'}</button>
         <button className="isis-path-sel-btn" onClick={downloadPNG}
           style={{color:'#16a34a',borderColor:'#bbf7d0'}}>📥 PNG</button>
       </div>
@@ -384,8 +452,9 @@ function EditablePathTopology({
       <div className="isis-path-topo-scroll">
         <svg ref={svgRef} width={W} height={H} viewBox={`0 0 ${W} ${H}`}
           className="isis-path-topo-svg"
-          style={{userSelect:'none', cursor:dragging?'grabbing':editMode==='addLink'?'crosshair':'default'}}
-          onMouseMove={onMouseMove} onMouseUp={()=>setDragging(null)} onMouseLeave={()=>setDragging(null)}>
+          style={{userSelect:'none', cursor:dragging?'grabbing':editMode==='addLink'?'crosshair':'default',
+                  display:'block', minWidth:'100%'}}
+          onMouseMove={onMouseMove} onMouseUp={()=>setDragging(null)} onMouseLeave={()=>{setDragging(null);setHovDesc(null)}}>
           <defs>
             {PATH_COLORS.map((c,i)=>(
               <marker key={i} id={`sarr-${readOnly?'ro':'ed'}-${i}`} markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
@@ -428,9 +497,10 @@ function EditablePathTopology({
             })
           })}
 
-          {/* Cost labels */}
+          {/* Cost labels — geser kiri kalau capacity juga aktif (supaya sejajar) */}
           {showCost&&(()=>{
             const seen=new Set()
+            const HGAP=4, CW=40
             return Object.entries(visEdges).map(([key,edge])=>{
               if((selectedPath!==null||selectedMetric!==null)&&!activeEdgeKeys.has(key)) return null
               if(seen.has(key)) return null; seen.add(key)
@@ -438,14 +508,18 @@ function EditablePathTopology({
               const {x1,y1,x2,y2}=shortenLine(pa.x,pa.y,pb.x,pb.y)
               const mx=(x1+x2)/2, my=(y1+y2)/2
               const isChanged=diff?.changedEdges?.[key]
+              const cap = showCap ? wanInfo[key]?.capacity : null
+              const capW = cap ? Math.max(CW, cap.length*5.8+16) : 0
+              // kalau ada capacity di sebelah kanan, geser cost ke kiri
+              const cx = cap ? mx - (capW/2 + HGAP/2) : mx
               return (
                 <g key={`cost-${key}`} style={{pointerEvents:'none'}}>
-                  <rect x={mx-20} y={my-11} width={40} height={22} rx="5"
+                  <rect x={cx-CW/2} y={my-11} width={CW} height={22} rx="5"
                     fill={isChanged?'#fef3c7':'#f0f0ff'} stroke={isChanged?'#f59e0b':'#4858c8'} strokeWidth="1.2"/>
-                  <text x={mx} y={my+1} textAnchor="middle" dominantBaseline="middle"
+                  <text x={cx} y={my+1} textAnchor="middle" dominantBaseline="middle"
                     fontSize="9.5" fill={isChanged?'#92400e':'#3730a3'} fontWeight="800">{edge.metric}</text>
                   {isChanged&&(
-                    <text x={mx} y={my+15} textAnchor="middle" fontSize="8" fill="#9ca3af" style={{pointerEvents:'none'}}>
+                    <text x={cx} y={my+15} textAnchor="middle" fontSize="8" fill="#9ca3af" style={{pointerEvents:'none'}}>
                       was {diff.changedEdges[key].orig}
                     </text>
                   )}
@@ -453,6 +527,110 @@ function EditablePathTopology({
               )
             })
           })()}
+
+          {/* WAN info boxes:
+               - Capacity: sejajar horizontal dengan cost label (di kanan cost)
+               - Intf A/B, Desc: stack vertikal di bawah baris cost+capacity */}
+          {(showCap||showIntf||showDesc)&&Object.entries(visEdges).map(([key,edge])=>{
+            const wan = wanInfo[key]
+            if (!wan) return null
+            if ((selectedPath!==null||selectedMetric!==null)&&!activeEdgeKeys.has(key)) return null
+            const pa=pos[edge.a], pb=pos[edge.b]; if(!pa||!pb) return null
+            const {x1,y1,x2,y2}=shortenLine(pa.x,pa.y,pb.x,pb.y)
+            const mx=(x1+x2)/2, my=(y1+y2)/2
+            const trunc = (s,n) => s&&s.length>n ? s.slice(0,n-1)+'…' : (s||'')
+            const ROW=22, GAP=2, CW=40, HGAP=4
+
+            // Baris 1: cost (kiri) + capacity (kanan) — sejajar horizontal
+            const cap = showCap ? wan.capacity : null
+            const capW = cap ? Math.max(CW, cap.length*5.8+16) : 0
+            // posisi X capacity: di kanan cost kalau showCost aktif, atau di tengah
+            const capX = showCost
+              ? mx + (CW/2 + HGAP/2)          // kanan cost
+              : mx                              // tengah sendiri
+            const hasRow1 = cap
+
+            // Desc — di bawah baris cost+cap (pakai desc_a atau desc_b jika salah satu ada)
+            const hasDesc = showDesc && (wan.desc_a || wan.desc_b)
+            if (!hasRow1 && !showIntf && !hasDesc) return null
+
+            // Posisi intf: masing-masing mendekati node-nya
+            // intf_a di ~22% dari A ke B, intf_b di ~22% dari B ke A
+            const ax = x1+(x2-x1)*0.22, ay = y1+(y2-y1)*0.22
+            const bx = x1+(x2-x1)*0.78, by = y1+(y2-y1)*0.78
+            const descY = my + ROW + GAP
+
+            return (
+              <g key={`wan-${key}`} style={{pointerEvents:'none'}}>
+                {/* Capacity sejajar cost — di tengah */}
+                {cap&&(
+                  <g>
+                    <rect x={capX-capW/2} y={my-11} width={capW} height={ROW} rx="5"
+                      fill="#f0f0ff" stroke={capColor(cap)} strokeWidth="1.2"/>
+                    <text x={capX} y={my+1} textAnchor="middle" dominantBaseline="middle"
+                      fontSize="9.5" fill={capColor(cap)} fontWeight="800">{cap}</text>
+                  </g>
+                )}
+                {/* Intf A — dekat node A */}
+                {showIntf && wan.intf_a && (()=>{
+                  const txt=trunc(wan.intf_a,16)
+                  const tw=Math.max(CW,txt.length*5.8+16)
+                  return (
+                    <g>
+                      <rect x={ax-tw/2} y={ay-11} width={tw} height={ROW} rx="5"
+                        fill="#f0f0ff" stroke="#7c3aed" strokeWidth="1.2"/>
+                      <text x={ax} y={ay+1} textAnchor="middle" dominantBaseline="middle"
+                        fontSize="9.5" fill="#5b21b6" fontWeight="800">{txt}</text>
+                    </g>
+                  )
+                })()}
+                {/* Intf B — dekat node B */}
+                {showIntf && wan.intf_b && (()=>{
+                  const txt=trunc(wan.intf_b,16)
+                  const tw=Math.max(CW,txt.length*5.8+16)
+                  return (
+                    <g>
+                      <rect x={bx-tw/2} y={by-11} width={tw} height={ROW} rx="5"
+                        fill="#f0f0ff" stroke="#7c3aed" strokeWidth="1.2"/>
+                      <text x={bx} y={by+1} textAnchor="middle" dominantBaseline="middle"
+                        fontSize="9.5" fill="#5b21b6" fontWeight="800">{txt}</text>
+                    </g>
+                  )
+                })()}
+                {/* Desc — di bawah cost+cap, interaktif: hover = full desc tooltip */}
+                {hasDesc && (()=>{
+                  // Pakai desc_a jika ada, fallback ke desc_b
+                  const descTxt = wan.desc_a || wan.desc_b || ''
+                  // Label default sebelum di-hover
+                  const txt = '📋 hover for desc'
+                  // Tooltip hover: tampilkan kedua sisi jika berbeda
+                  const descA = wan.desc_a || null
+                  const descB = wan.desc_b || null
+                  const tw=Math.max(CW, txt.length*5.4+16)
+                  const isPinned = !!pinnedDescs[key]
+                  const pinPayload = {descA, descB, edgeA: edge.a, edgeB: edge.b, x:mx, y:descY-4}
+                  return (
+                    <g style={{cursor:'pointer', pointerEvents:'all'}}
+                      onMouseEnter={()=>{ if(!isPinned) setHovDesc(pinPayload) }}
+                      onMouseLeave={()=>{ if(!isPinned) setHovDesc(null) }}
+                      onDoubleClick={e=>{
+                        e.stopPropagation()
+                        setPinnedDescs(prev=>{
+                          if(prev[key]){ const n={...prev}; delete n[key]; return n }
+                          return {...prev, [key]: pinPayload}
+                        })
+                        setHovDesc(null)
+                      }}>
+                      <rect x={mx-tw/2} y={descY} width={tw} height={ROW} rx="5"
+                        fill={isPinned?'#fde68a':'#fef3c7'} stroke={isPinned?'#b45309':'#d97706'} strokeWidth={isPinned?2:1.5}/>
+                      <text x={mx} y={descY+ROW/2} textAnchor="middle" dominantBaseline="middle"
+                        fontSize="9.5" fill="#92400e" fontWeight="800">{isPinned?'📌 pinned':txt}</text>
+                    </g>
+                  )
+                })()}
+              </g>
+            )
+          })}
 
           {/* Edge hit areas */}
           {!readOnly&&Object.entries(visEdges).map(([key,edge])=>{
@@ -566,6 +744,89 @@ function EditablePathTopology({
               }
             }
             return tips
+          })()}
+
+          {/* Full description tooltip — helper render, used for both hover and pinned */}
+          {(()=>{
+            const maxW = 300
+            const wrapText = (txt, maxChars=38) => {
+              if (!txt) return []
+              // split on spaces AND on '-' boundaries (for long TRK- strings without spaces)
+              const tokens = txt.split(/[\s]+/)
+              const lines = []
+              let cur = ''
+              for (const w of tokens) {
+                // force-break very long tokens (no spaces) at maxChars
+                let remaining = w
+                while (remaining.length > maxChars) {
+                  if (cur) { lines.push(cur); cur='' }
+                  lines.push(remaining.slice(0, maxChars))
+                  remaining = remaining.slice(maxChars)
+                }
+                if ((cur ? cur+' '+remaining : remaining).length > maxChars) {
+                  if (cur) lines.push(cur); cur=remaining
+                } else {
+                  cur = cur ? cur+' '+remaining : remaining
+                }
+              }
+              if (cur) lines.push(cur)
+              return lines
+            }
+            const buildRows = d => {
+              const linesA = d.descA ? wrapText(d.descA) : []
+              const linesB = d.descB ? wrapText(d.descB) : []
+              const showBoth = d.descA && d.descB && d.descA !== d.descB
+              const rows = []
+              if (d.descA) {
+                rows.push({ type:'label', text:`▶ ${d.edgeA||'A'}` })
+                linesA.forEach(l=>rows.push({type:'text',text:l}))
+              }
+              if (showBoth) {
+                rows.push({type:'sep'})
+                rows.push({type:'label',text:`▶ ${d.edgeB||'B'}`})
+                linesB.forEach(l=>rows.push({type:'text',text:l}))
+              } else if (!d.descA && d.descB) {
+                rows.push({type:'label',text:`▶ ${d.edgeB||'B'}`})
+                linesB.forEach(l=>rows.push({type:'text',text:l}))
+              }
+              return rows
+            }
+            const renderTip = (key, d, pinned=false) => {
+              const rows = buildRows(d)
+              if (!rows.length) return null
+              const ROW_H=16, PAD=10
+              const TH = rows.length*ROW_H + PAD*2
+              const tx = Math.min(Math.max(d.x, maxW/2+6), W-maxW/2-6)
+              const ty = Math.max(4, d.y - TH - 8)
+              let yOff = ty + PAD
+              return (
+                <g key={key} style={{pointerEvents:'none'}}>
+                  <rect x={tx-maxW/2+2} y={ty+2} width={maxW} height={TH} rx="7" fill="rgba(0,0,0,0.13)"/>
+                  <rect x={tx-maxW/2} y={ty} width={maxW} height={TH} rx="7"
+                    fill="#fffbeb" stroke={pinned?'#b45309':'#d97706'} strokeWidth={pinned?2:1.5}/>
+                  {pinned&&<text x={tx-maxW/2+8} y={ty+10} fontSize="8" fill="#b45309" fontWeight="700">📌</text>}
+                  {rows.map((row,i)=>{
+                    const y=yOff; yOff+=ROW_H
+                    if(row.type==='sep') return (
+                      <line key={i} x1={tx-maxW/2+8} x2={tx+maxW/2-8} y1={y+ROW_H/2} y2={y+ROW_H/2}
+                        stroke="#d97706" strokeWidth="0.8" opacity="0.5"/>
+                    )
+                    if(row.type==='label') return (
+                      <text key={i} x={tx-maxW/2+10} y={y+12} fontSize="9" fill="#b45309" fontWeight="800" fontStyle="italic">{row.text}</text>
+                    )
+                    return (
+                      <text key={i} x={tx-maxW/2+16} y={y+12} fontSize="9.5" fill="#92400e" fontWeight="600" fontFamily="'Courier New',monospace">{row.text}</text>
+                    )
+                  })}
+                </g>
+              )
+            }
+            return <>
+              {/* Pinned desc tooltips — selalu tampil */}
+              {Object.entries(pinnedDescs).map(([k,d])=>renderTip(`pin-desc-${k}`,d,true))}
+              {/* Hover tooltip */}
+              {hovDesc && renderTip('desc-hover',hovDesc,false)}
+            </>
           })()}
         </svg>
       </div>
@@ -922,7 +1183,7 @@ function SimPathCard({ p, origPaths, expandedPath, setExpandedPath }) {
 }
 
 // ─── Path Compare Section ──────────────────────────────────────────────────────
-function PathCompareSection({ src, dst, origPaths, simPaths, origNodes, origEdges, simNodes, simEdges, diff, showCost, showIPs }) {
+function PathCompareSection({ src, dst, origPaths, simPaths, origNodes, origEdges, simNodes, simEdges, diff, showCost, showIPs, wanData={}, showIntf=false, showDesc=false, showCap=false }) {
   const [origSelectedPath, setOrigSelectedPath] = useState(null)
   const [simSelectedPath,  setSimSelectedPath]  = useState(null)
   const emptyDiff = { addedNodes:[], removedNodes:[], addedEdges:[], removedEdges:[], changedEdges:{} }
@@ -1023,6 +1284,7 @@ function PathCompareSection({ src, dst, origPaths, simPaths, origNodes, origEdge
             onNodeClick={handleOrigNodeClick}
             selectedPath={origSelectedPath}
             showCost={showCost} showIPs={showIPs}
+            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap}
             origNodeCount={Object.keys(origNodes).length}
           />
         </div>
@@ -1054,6 +1316,7 @@ function PathCompareSection({ src, dst, origPaths, simPaths, origNodes, origEdge
             onNodeClick={handleSimNodeClick}
             selectedPath={simSelectedPath}
             showCost={showCost} showIPs={showIPs}
+            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap}
             origNodeCount={Object.keys(origNodes).length}
           />
         </div>
@@ -1082,11 +1345,22 @@ export default function LSDBSimulator() {
   const [pathErr, setPathErr]     = useState('')
   const [hasSearched, setHasSearched] = useState(false)
 
+  // WAN data (supplementary — from primbon2 database)
+  const [wanData, setWanData] = useState({})
+  useEffect(()=>{
+    apiFetch('/api/isis/wan-ips/')
+      .then(d=>setWanData(d))
+      .catch(()=>{})  // silent fail — WAN data is optional/supplementary
+  },[])
+
   // UI state
   const [selectedPath,   setSelectedPath]   = useState(null)
   const [selectedMetric, setSelectedMetric] = useState(null)
   const [showCost,       setShowCost]       = useState(false)
   const [showIPs,        setShowIPs]        = useState(false)
+  const [showIntf,       setShowIntf]       = useState(false)
+  const [showDesc,       setShowDesc]       = useState(false)
+  const [showCap,        setShowCap]        = useState(false)
   const [expandedPath,   setExpandedPath]   = useState(null)
   const [showCompare,    setShowCompare]    = useState(false)
   const [editMode,       setEditMode]       = useState('select')
@@ -1270,6 +1544,9 @@ export default function LSDBSimulator() {
     if (signal?.startsWith('__LS_'))   { const m=Number(signal.replace('__LS_','').replace('__','')); setSelectedMetric(prev=>prev===m?null:m); setSelectedPath(null); return }
     if (signal==='__TOGGLE_COST__') { setShowCost(v=>!v); return }
     if (signal==='__TOGGLE_IP__')   { setShowIPs(v=>!v); return }
+    if (signal==='__TOGGLE_INTF__') { setShowIntf(v=>!v); return }
+    if (signal==='__TOGGLE_DESC__') { setShowDesc(v=>!v); return }
+    if (signal==='__TOGGLE_CAP__')  { setShowCap(v=>!v); return }
     // addLink mode: node clicked
     if (editMode==='addLink') {
       if (!addLinkSrc) setAddLinkSrc(signal)
@@ -1389,6 +1666,7 @@ export default function LSDBSimulator() {
             onNodeClick={handleNodeClick}
             selectedPath={selectedPath} selectedMetric={selectedMetric}
             showCost={showCost} showIPs={showIPs}
+            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap}
             origNodeCount={Object.keys(origNodes).length}
           />
 
@@ -1409,6 +1687,7 @@ export default function LSDBSimulator() {
               simNodes={simNodes} simEdges={simEdges}
               diff={diff}
               showCost={showCost} showIPs={showIPs}
+              wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap}
             />
           )}
         </div>
