@@ -138,9 +138,11 @@ function EditablePathTopology({
   simNodes, simEdges, origEdges,
   diff, readOnly=false,
   extraNodes=[],          // additional nodes to show beyond path nodes
+  hiddenNodes=new Set(),  // nodes hidden from drawing (but kept in sim)
+  hiddenEdges=new Set(),  // edges hidden from drawing (but kept in sim)
   editMode, addLinkSrc,
   onNodeDelete, onEdgeClick, onNodeClick,
-  selectedPath, showCost, showIPs,
+  selectedPath, selectedMetric=null, showCost, showIPs,
   origNodeCount=0,
 }) {
   const [posOverride, setPosOverride] = useState({})
@@ -150,7 +152,11 @@ function EditablePathTopology({
   const [pinnedEdges, setPinnedEdges] = useState(new Set())
   const svgRef = useRef()
 
-  const displayPaths = selectedPath!==null ? [simPaths[selectedPath]] : simPaths
+  const displayPaths = useMemo(() => {
+    if (selectedPath !== null) return [simPaths[selectedPath]]
+    if (selectedMetric !== null) return simPaths.filter(p => p.total_metric === selectedMetric)
+    return simPaths
+  }, [simPaths, selectedPath, selectedMetric])
 
   // Edge keys that belong to the currently displayed path(s) — used to filter cost/IP labels
   const activeEdgeKeys = useMemo(() => {
@@ -163,16 +169,31 @@ function EditablePathTopology({
 
   const allNodesSet = useMemo(() => {
     const s = new Set()
-    // 1. nodes from computed paths
+    // 1. nodes from computed paths — always show (path takes priority over hidden state)
     for (const p of simPaths) for (const n of p.path) s.add(n)
-    // 2. newly added nodes (not in original graph) — show them even if not in any path yet
-    if (diff?.addedNodes) for (const n of diff.addedNodes) if (simNodes[n]) s.add(n)
-    // 3. extra nodes explicitly requested (e.g. from ExistingNodeBrowser)
-    for (const n of extraNodes) if (simNodes[n]) s.add(n)
+    // 2. newly added nodes (not in original graph) — show unless hidden
+    if (diff?.addedNodes) for (const n of diff.addedNodes) if (simNodes[n]&&!hiddenNodes.has(n)) s.add(n)
+    // 3. extra nodes explicitly requested — show unless hidden
+    for (const n of extraNodes) if (simNodes[n]&&!hiddenNodes.has(n)) s.add(n)
     return s
-  }, [simPaths, diff, extraNodes, simNodes])
+  }, [simPaths, diff, extraNodes, simNodes, hiddenNodes])
 
   const { positions: basePos, W, H } = useMemo(() => computeLevelLayout(simPaths), [simPaths])
+
+  // Auto-save computed basePos positions into posOverride for nodes not yet overridden.
+  // This ensures layout persists when src/dst changes and simPaths is recomputed —
+  // old nodes keep their positions instead of being moved to the staging row.
+  useEffect(() => {
+    if (readOnly) return
+    setPosOverride(prev => {
+      const next = { ...prev }
+      let changed = false
+      for (const [h, p] of Object.entries(basePos)) {
+        if (next[h] === undefined) { next[h] = p; changed = true }
+      }
+      return changed ? next : prev
+    })
+  }, [basePos, readOnly])
 
   // When allNodesSet changes, only purge overrides for nodes that left the set
   // (don't wipe all overrides — preserves drag positions for existing nodes)
@@ -190,8 +211,9 @@ function EditablePathTopology({
   })
 
   const pos = useMemo(() => {
-    // 1. Start with path-layout positions
-    const p = { ...basePos }
+    // 1. Start with path-layout positions — only for nodes in allNodesSet (excludes hidden nodes)
+    const p = {}
+    for (const [h, pp] of Object.entries(basePos)) if (allNodesSet.has(h)) p[h] = pp
     // 2. Place extra nodes (not in path layout) in a staging row at the top of the SVG
     const unpositioned = [...allNodesSet].filter(n => !p[n])
     if (unpositioned.length > 0) {
@@ -208,13 +230,13 @@ function EditablePathTopology({
     return p
   }, [basePos, posOverride, allNodesSet, W])
 
-  // Visible edges (both endpoints in topology)
+  // Visible edges (both endpoints in topology, not hidden)
   const visEdges = useMemo(() => {
     const r = {}
     for (const [k,e] of Object.entries(simEdges))
-      if (allNodesSet.has(e.a)&&allNodesSet.has(e.b)) r[k]=e
+      if (!hiddenEdges.has(k)&&allNodesSet.has(e.a)&&allNodesSet.has(e.b)) r[k]=e
     return r
-  }, [simEdges, allNodesSet])
+  }, [simEdges, allNodesSet, hiddenEdges])
 
   // Visible neighbor count per node (only edges drawn in topology)
   const neighborCounts = useMemo(() => {
@@ -311,8 +333,34 @@ function EditablePathTopology({
     <div className="sim-topo-wrap">
       {/* Selector bar */}
       <div className="isis-path-selector">
-        <button className={`isis-path-sel-btn ${selectedPath===null?'sel-all':''}`}
+        <button className={`isis-path-sel-btn ${selectedPath===null&&selectedMetric===null?'sel-all':''}`}
           onClick={()=>onNodeClick?.('__ALL__')}>All Paths</button>
+
+        {/* Load Share groups (equal-cost groups) */}
+        {(()=>{
+          const groups=[]
+          const seen={}
+          for(const p of simPaths){
+            if(!seen[p.total_metric]){seen[p.total_metric]={metric:p.total_metric,count:0,indices:[]}; groups.push(seen[p.total_metric])}
+            seen[p.total_metric].count++
+            seen[p.total_metric].indices.push(p.path_index-1)
+          }
+          if(groups.length<=1||groups.every(g=>g.count===1)) return null
+          return groups.filter(g=>g.count>1).map((g,gi)=>(
+            <button key={`ls-${g.metric}`}
+              className={`isis-path-sel-btn sim-ls-btn ${selectedMetric===g.metric?'sel-active':''}`}
+              style={selectedMetric===g.metric
+                ?{background:'#7c3aed',borderColor:'#7c3aed',color:'#fff'}
+                :{borderColor:'#7c3aed',color:'#7c3aed'}}
+              onClick={()=>onNodeClick?.(`__LS_${g.metric}__`)}
+              title={`Load Share: ${g.count} path dengan metric ${g.metric}`}>
+              ⚖ LS{gi+1}
+              <span className="isis-path-sel-meta"> ×{g.count} · {g.metric}</span>
+            </button>
+          ))
+        })()}
+
+        <span className="isis-path-sel-divider"/>
         {simPaths.map((p,pi)=>(
           <button key={pi}
             className={`isis-path-sel-btn ${selectedPath===pi?'sel-active':''}`}
@@ -384,7 +432,7 @@ function EditablePathTopology({
           {showCost&&(()=>{
             const seen=new Set()
             return Object.entries(visEdges).map(([key,edge])=>{
-              if(selectedPath!==null&&!activeEdgeKeys.has(key)) return null
+              if((selectedPath!==null||selectedMetric!==null)&&!activeEdgeKeys.has(key)) return null
               if(seen.has(key)) return null; seen.add(key)
               const pa=pos[edge.a], pb=pos[edge.b]; if(!pa||!pb) return null
               const {x1,y1,x2,y2}=shortenLine(pa.x,pa.y,pb.x,pb.y)
@@ -498,7 +546,7 @@ function EditablePathTopology({
           {(()=>{
             const tips=[]
             if(showIPs) for(const [key,edge] of Object.entries(visEdges)){
-              if(selectedPath!==null&&!activeEdgeKeys.has(key)) continue
+              if((selectedPath!==null||selectedMetric!==null)&&!activeEdgeKeys.has(key)) continue
               const pa=pos[edge.a],pb=pos[edge.b]; if(!pa||!pb) continue
               const {x1,y1,x2,y2}=shortenLine(pa.x,pa.y,pb.x,pb.y)
               tips.push(edgeIpTooltip(key,edge,(x1+x2)/2,(y1+y2)/2))
@@ -635,6 +683,39 @@ function AddRouterDialog({ onConfirm, onCancel }) {
             ✓ Add Router
           </button>
           <button className="sim-ep-btn" onClick={onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Delete Confirm Dialog ─────────────────────────────────────────────────────
+function DeleteConfirmDialog({ type, label, onHide, onDelete, onCancel }) {
+  const isNode = type === 'node'
+  return (
+    <div className="sim-modal-overlay" onClick={onCancel}>
+      <div className="sim-modal" onClick={e=>e.stopPropagation()}>
+        <div className="sim-modal-header">
+          {isNode ? '🖥 Hapus Router' : '🔗 Hapus Link'}
+        </div>
+        <div style={{padding:'8px 0 14px',fontSize:13,color:'#374151',fontWeight:600}}>
+          {label}
+        </div>
+        <div style={{fontSize:12,color:'#6b7280',marginBottom:16}}>
+          Pilih tindakan penghapusan:
+        </div>
+        <div className="sim-modal-actions" style={{flexDirection:'column',gap:8}}>
+          <button className="sim-ep-btn" style={{justifyContent:'flex-start',gap:8}}
+            onClick={onHide}>
+            👁 Sembunyikan dari gambar saja
+            <span style={{fontSize:10,color:'#9ca3af',marginLeft:'auto'}}>tetap ada di simulasi</span>
+          </button>
+          <button className="sim-ep-btn sim-ep-btn--del" style={{justifyContent:'flex-start',gap:8}}
+            onClick={onDelete}>
+            🗑 Hapus dari simulasi
+            <span style={{fontSize:10,color:'#fca5a5',marginLeft:'auto'}}>dihapus dari graph &amp; perhitungan</span>
+          </button>
+          <button className="sim-ep-btn" onClick={onCancel}>Batal</button>
         </div>
       </div>
     </div>
@@ -1003,6 +1084,7 @@ export default function LSDBSimulator() {
 
   // UI state
   const [selectedPath,   setSelectedPath]   = useState(null)
+  const [selectedMetric, setSelectedMetric] = useState(null)
   const [showCost,       setShowCost]       = useState(false)
   const [showIPs,        setShowIPs]        = useState(false)
   const [expandedPath,   setExpandedPath]   = useState(null)
@@ -1013,6 +1095,9 @@ export default function LSDBSimulator() {
   const [editingEdge,    setEditingEdge]    = useState(null)
   // extra nodes to force-show in topology (beyond path nodes)
   const [extraVisibleNodes, setExtraVisibleNodes] = useState([])
+  const [hiddenNodes,       setHiddenNodes]       = useState(new Set())
+  const [hiddenEdges,       setHiddenEdges]       = useState(new Set())
+  const [deleteConfirm,     setDeleteConfirm]     = useState(null) // {type,id,label}
   // browsers
   const [showExistingLinks, setShowExistingLinks] = useState(false)
   const [showExistingNodes, setShowExistingNodes] = useState(false)
@@ -1028,19 +1113,29 @@ export default function LSDBSimulator() {
   // Set of nodes currently visible in the main topology SVG
   const topologyVisibleNodes = useMemo(()=>{
     const s = new Set()
-    for (const p of simPaths) for (const n of p.path) s.add(n)
-    if (diff.addedNodes) for (const n of diff.addedNodes) s.add(n)
-    for (const n of extraVisibleNodes) s.add(n)
+    for (const p of simPaths) for (const n of p.path) s.add(n)  // path nodes always visible
+    if (diff.addedNodes) for (const n of diff.addedNodes) if (!hiddenNodes.has(n)) s.add(n)
+    for (const n of extraVisibleNodes) if (!hiddenNodes.has(n)) s.add(n)
     return s
-  }, [simPaths, diff, extraVisibleNodes])
+  }, [simPaths, diff, extraVisibleNodes, hiddenNodes])
 
-  // Set of edge keys currently drawn in the SVG (both endpoints visible)
+  // Auto-reveal: if a hidden node is required by a new path, remove it from hiddenNodes
+  useEffect(()=>{
+    if (!simPaths.length || !hiddenNodes.size) return
+    const onPath = new Set()
+    for (const p of simPaths) for (const n of p.path) onPath.add(n)
+    const toReveal = [...hiddenNodes].filter(n => onPath.has(n))
+    if (toReveal.length)
+      setHiddenNodes(prev=>{ const s=new Set(prev); toReveal.forEach(n=>s.delete(n)); return s })
+  },[simPaths])
+
+  // Set of edge keys currently drawn in the SVG (both endpoints visible, not hidden)
   const topologyVisibleEdges = useMemo(()=>{
     const s = new Set()
     for (const [k, e] of Object.entries(simEdges))
-      if (topologyVisibleNodes.has(e.a) && topologyVisibleNodes.has(e.b)) s.add(k)
+      if (!hiddenEdges.has(k)&&topologyVisibleNodes.has(e.a)&&topologyVisibleNodes.has(e.b)) s.add(k)
     return s
-  }, [simEdges, topologyVisibleNodes])
+  }, [simEdges, topologyVisibleNodes, hiddenEdges])
 
   // Load
   useEffect(()=>{
@@ -1075,28 +1170,52 @@ export default function LSDBSimulator() {
     const sp=yenKSP(simNodes,simEdges,src,dst,k)
     const op=yenKSP(origNodes,origEdges,src,dst,k)
     setSimPaths(sp); setOrigPaths(op)
-    setHasSearched(true); setSelectedPath(null); setExpandedPath(null)
+    setHasSearched(true); setSelectedPath(null); setSelectedMetric(null); setExpandedPath(null)
     if (!sp.length) setPathErr('Tidak ada path ditemukan di topologi simulasi')
   }
 
   const resetSim = () => {
     setSimNodes({...origNodes}); setSimEdges({...origEdges})
     setExtraVisibleNodes([])
+    setHiddenNodes(new Set()); setHiddenEdges(new Set())
     setEditMode('select'); setAddLinkSrc(null); setAddLinkDst(null); setEditingEdge(null)
+    setDeleteConfirm(null)
     if (hasSearched&&src&&dst)
       setTimeout(()=>setSimPaths(yenKSP({...origNodes},{...origEdges},src,dst,k)),0)
   }
 
-  // Edit ops
+  // Edit ops — intercept to show confirm dialog
+  const handleNodeDelete = hostname => {
+    setDeleteConfirm({ type:'node', id:hostname, label:hostname })
+  }
+  const handleEdgeDelete = key => {
+    const e = simEdges[key]
+    setDeleteConfirm({ type:'edge', id:key, label:e?`${e.a} ↔ ${e.b}`:key })
+  }
+
+  // Hide from drawing only (keep in simNodes/simEdges)
+  const hideNode = hostname => {
+    setHiddenNodes(prev=>new Set([...prev, hostname]))
+    setExtraVisibleNodes(prev=>prev.filter(n=>n!==hostname))
+    setDeleteConfirm(null)
+  }
+  const hideEdge = key => {
+    setHiddenEdges(prev=>new Set([...prev, key]))
+    setDeleteConfirm(null)
+  }
+
+  // Delete from simulation entirely
   const deleteNode = hostname => {
     setSimNodes(prev=>{const n={...prev};delete n[hostname];return n})
     setSimEdges(prev=>{const e={...prev};for(const k of Object.keys(e))if(e[k].a===hostname||e[k].b===hostname)delete e[k];return e})
-    // Remove from extra visible if present
     setExtraVisibleNodes(prev=>prev.filter(n=>n!==hostname))
-    setEditingEdge(null)
+    setHiddenNodes(prev=>{const s=new Set(prev);s.delete(hostname);return s})
+    setEditingEdge(null); setDeleteConfirm(null)
   }
   const deleteEdge = key => {
-    setSimEdges(prev=>{const e={...prev};delete e[key];return e}); setEditingEdge(null)
+    setSimEdges(prev=>{const e={...prev};delete e[key];return e})
+    setHiddenEdges(prev=>{const s=new Set(prev);s.delete(key);return s})
+    setEditingEdge(null); setDeleteConfirm(null)
   }
   const saveEdgeMetric = (key,metric) => {
     setSimEdges(prev=>({...prev,[key]:{...prev[key],metric}})); setEditingEdge(null)
@@ -1146,8 +1265,9 @@ export default function LSDBSimulator() {
 
   // SVG callback router
   const handleNodeClick = signal => {
-    if (signal==='__ALL__')          { setSelectedPath(null); return }
-    if (signal?.startsWith('__PATH_')) { setSelectedPath(Number(signal.replace('__PATH_','').replace('__',''))); return }
+    if (signal==='__ALL__')            { setSelectedPath(null); setSelectedMetric(null); return }
+    if (signal?.startsWith('__PATH_')) { setSelectedPath(Number(signal.replace('__PATH_','').replace('__',''))); setSelectedMetric(null); return }
+    if (signal?.startsWith('__LS_'))   { const m=Number(signal.replace('__LS_','').replace('__','')); setSelectedMetric(prev=>prev===m?null:m); setSelectedPath(null); return }
     if (signal==='__TOGGLE_COST__') { setShowCost(v=>!v); return }
     if (signal==='__TOGGLE_IP__')   { setShowIPs(v=>!v); return }
     // addLink mode: node clicked
@@ -1262,11 +1382,12 @@ export default function LSDBSimulator() {
             simNodes={simNodes} simEdges={simEdges} origEdges={origEdges}
             diff={diff}
             extraNodes={extraVisibleNodes}
+            hiddenNodes={hiddenNodes} hiddenEdges={hiddenEdges}
             editMode={editMode} addLinkSrc={addLinkSrc}
-            onNodeDelete={deleteNode}
+            onNodeDelete={handleNodeDelete}
             onEdgeClick={(key,edge,x,y)=>setEditingEdge({key,edge,x,y})}
             onNodeClick={handleNodeClick}
-            selectedPath={selectedPath}
+            selectedPath={selectedPath} selectedMetric={selectedMetric}
             showCost={showCost} showIPs={showIPs}
             origNodeCount={Object.keys(origNodes).length}
           />
@@ -1300,7 +1421,7 @@ export default function LSDBSimulator() {
           edge={simEdges[editingEdge.key]||editingEdge.edge}
           origEdge={origEdges[editingEdge.key]}
           anchorX={editingEdge.x} anchorY={editingEdge.y}
-          onSave={saveEdgeMetric} onDelete={deleteEdge}
+          onSave={saveEdgeMetric} onDelete={handleEdgeDelete}
           onClose={()=>setEditingEdge(null)}/>
       )}
       {addLinkSrc&&addLinkDst&&(
@@ -1322,6 +1443,13 @@ export default function LSDBSimulator() {
       {showSimLinks&&(
         <SimLinkBrowser simEdges={simEdges} origEdges={origEdges} diff={diff}
           onEdit={openSimLinkEdit} onClose={()=>setShowSimLinks(false)}/>
+      )}
+      {deleteConfirm&&(
+        <DeleteConfirmDialog
+          type={deleteConfirm.type} label={deleteConfirm.label}
+          onHide={()=>deleteConfirm.type==='node'?hideNode(deleteConfirm.id):hideEdge(deleteConfirm.id)}
+          onDelete={()=>deleteConfirm.type==='node'?deleteNode(deleteConfirm.id):deleteEdge(deleteConfirm.id)}
+          onCancel={()=>setDeleteConfirm(null)}/>
       )}
     </div>
   )
