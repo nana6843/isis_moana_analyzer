@@ -384,7 +384,7 @@ function EditablePathTopology({
           {showCost&&(()=>{
             const seen=new Set()
             return Object.entries(visEdges).map(([key,edge])=>{
-              if(!activeEdgeKeys.has(key)) return null
+              if(selectedPath!==null&&!activeEdgeKeys.has(key)) return null
               if(seen.has(key)) return null; seen.add(key)
               const pa=pos[edge.a], pb=pos[edge.b]; if(!pa||!pb) return null
               const {x1,y1,x2,y2}=shortenLine(pa.x,pa.y,pb.x,pb.y)
@@ -498,7 +498,7 @@ function EditablePathTopology({
           {(()=>{
             const tips=[]
             if(showIPs) for(const [key,edge] of Object.entries(visEdges)){
-              if(!activeEdgeKeys.has(key)) continue
+              if(selectedPath!==null&&!activeEdgeKeys.has(key)) continue
               const pa=pos[edge.a],pb=pos[edge.b]; if(!pa||!pb) continue
               const {x1,y1,x2,y2}=shortenLine(pa.x,pa.y,pb.x,pb.y)
               tips.push(edgeIpTooltip(key,edge,(x1+x2)/2,(y1+y2)/2))
@@ -1063,6 +1063,15 @@ export default function LSDBSimulator() {
     setPathErr('')
     if (!src||!dst){setPathErr('Pilih source dan destination');return}
     if (src===dst){setPathErr('Source dan destination tidak boleh sama');return}
+    // Freeze currently visible topology nodes so they persist when src/dst changes
+    if (hasSearched) {
+      setExtraVisibleNodes(prev => {
+        const next = [...prev]
+        for (const n of topologyVisibleNodes)
+          if (!next.includes(n)) next.push(n)
+        return next
+      })
+    }
     const sp=yenKSP(simNodes,simEdges,src,dst,k)
     const op=yenKSP(origNodes,origEdges,src,dst,k)
     setSimPaths(sp); setOrigPaths(op)
