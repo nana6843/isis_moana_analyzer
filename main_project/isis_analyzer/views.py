@@ -5,7 +5,7 @@ from django.shortcuts import render
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Q
 from django.core.management import call_command
 from io import StringIO
@@ -14,6 +14,10 @@ from .management.commands.get_lsdb_via_ssh import get_huawei_isis_lsdb
 from pathlib import Path
 
 from .models import ISISRouter, ISISLink
+
+
+from rest_framework.decorators import api_view, permission_classes
+from .models import IpAddWan, normalize_ip, extract_capacity
 
 import os
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -312,3 +316,43 @@ class RefreshLSDBView(APIView):
             })
         except Exception as e:
             return Response({'status': 'error', 'message': str(e)}, status=500)
+
+
+
+
+@api_view(['GET'])
+# @permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
+def wan_ip_list(request):
+    """
+    Mengembalikan semua WAN IP dari primbon2 dikelompokkan per hostname.
+    Format response:
+    {
+      "DPSTKUHW02": [
+        { "ip": "10.66.178.181", "ip_clean": "10.66.178.181",
+          "intf": "GigabitEthernet0/2/1", "description": "TRK-...",
+          "cost": 5000, "capacity": "1G" },
+        ...
+      ],
+      ...
+    }
+    """
+    rows = IpAddWan.objects.using('primbon2').only(
+        'hostname', 'ip', 'intf', 'description', 'cost'
+    )
+ 
+    result = {}
+    for row in rows:
+        h = row.hostname
+        if h not in result:
+            result[h] = []
+        result[h].append({
+            'ip':          row.ip,
+            'ip_clean':    normalize_ip(row.ip),
+            'intf':        row.intf or '',
+            'description': row.description or '',
+            'cost':        row.cost,
+            'capacity':    extract_capacity(row.intf, row.description),
+        })
+ 
+    return Response(result)

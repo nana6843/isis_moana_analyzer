@@ -107,8 +107,24 @@ DATABASES = {
             'charset': 'utf8mb4',
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
         },
-    }
+
+    
+    },
+
+    # Database kedua — primbon2 (app1_ip_add_wan, dll.)
+    'primbon2': {
+        'ENGINE':   'django.db.backends.mysql',
+        'NAME':     os.environ.get('DB_NAME_WAN', 'primbon2'),
+        'USER':     os.environ.get('DB_USER', ''),
+        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+        'HOST':     os.environ.get('DB_HOST', ''),
+        'PORT':     os.environ.get('DB_PORT', '3306'),
+        'OPTIONS':  _DB_OPTIONS,
+    },
 }
+
+# Router yang mengarahkan model IpAddWan ke database primbon2
+DATABASE_ROUTERS = ['isis_analyzer.db_router.PrimbonRouter']
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
