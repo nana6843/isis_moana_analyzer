@@ -47,12 +47,29 @@ function buildGraph(routers) {
     nodes[r.hostname] = { hostname: r.hostname, router_ips: r.router_ips || [], prefix_sid: r.prefix_sid ?? null }
   for (const r of routers) {
     for (const adj of (r.adjacency || [])) {
-      if (!nodes[adj.hostname]) continue
+      // Jangan skip edge ke transit node (router yang muncul sebagai neighbor tapi
+      // tidak punya LSP sendiri di LSDB). buildAdjList di graphAlgo.js sudah
+      // menangani transit node — edge harus tetap dimasukkan ke simEdges.
       const key = [r.hostname, adj.hostname].sort().join('|||')
       if (!edges[key]) edges[key] = { a: r.hostname, b: adj.hostname, metric: adj.metric ?? 10, ip_a: adj.local_ip || null, ip_b: adj.remote_ip || null }
     }
   }
   return { nodes, edges }
+}
+
+// ─── Traffic helpers ───────────────────────────────────────────────────────────
+// Parse "17,221,385 kbit/s" → number kbps (atau null jika tidak valid)
+function parseKbps(str) {
+  if (!str) return null
+  const num = parseFloat(str.replace(/,/g, ''))
+  return isNaN(num) ? null : num
+}
+// Format kbps ke label ringkas: "17.2G", "512M", "800K"
+function fmtKbps(kbps) {
+  if (kbps === null || kbps === undefined) return '#NA'
+  if (kbps >= 1_000_000) return (kbps / 1_000_000).toFixed(1) + 'G'
+  if (kbps >= 1_000)     return Math.round(kbps / 1_000) + 'M'
+  return Math.round(kbps) + 'K'
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -158,6 +175,7 @@ function EditablePathTopology({
   selectedPath, selectedMetric=null, showCost, showIPs,
   wanData={}, showIntf=false, showDesc=false, showCap=false,
   showAllLinks=false,
+  trafficData=null, showTraffic=false, showHighTrafficOnly=false,
   layoutVersion=0,
   origNodeCount=0,
 }) {
@@ -310,6 +328,29 @@ function EditablePathTopology({
     }
     return result
   }, [simEdges, wanData])
+
+  // Traffic lookup map: "deviceA__deviceZ" → { device_a, device_z, capacity_gbps, az_kbps, za_kbps }
+  // Hanya pakai sensor TRAFFIC_TRUNK_ISIS per direction; jika tidak ada → null (#NA)
+  const trafficMap = useMemo(() => {
+    if (!trafficData?.length) return {}
+    const m = {}
+    for (const metro of trafficData) {
+      const sensors = metro.metro_sensors || []
+      const azSensor = sensors.find(s => s.sensor_type.startsWith('TRAFFIC_TRUNK_ISIS') && s.direction === 'a_z')
+      const zaSensor = sensors.find(s => s.sensor_type.startsWith('TRAFFIC_TRUNK_ISIS') && s.direction === 'z_a')
+      const entry = {
+        device_a:     metro.device_a,
+        device_z:     metro.device_z,
+        capacity_gbps: metro.capacity_gbps,
+        az_kbps: azSensor ? parseKbps(azSensor.sensor_lastvalue) : null,
+        za_kbps: zaSensor ? parseKbps(zaSensor.sensor_lastvalue) : null,
+      }
+      m[`${metro.device_a}__${metro.device_z}`] = entry
+      m[`${metro.device_z}__${metro.device_a}`] = entry  // bidirectional lookup
+    }
+    return m
+  }, [trafficData])
+
 
   // Visible neighbor count per node (only edges drawn in topology)
   const neighborCounts = useMemo(() => {
@@ -483,6 +524,23 @@ function EditablePathTopology({
         <button className={`isis-path-sel-btn ${showCap?'cost-on':''}`}
           style={showCap?{background:'#dcfce7',borderColor:'#16a34a',color:'#14532d'}:{}}
           onClick={()=>onNodeClick?.('__TOGGLE_CAP__')}>{showCap?'⚡ Hide Cap':'⚡ Show Cap'}</button>
+        {trafficData&&(
+          <>
+            <button className={`isis-path-sel-btn ${showTraffic?'cost-on':''}`}
+              style={showTraffic?{background:'#fce7f3',borderColor:'#db2777',color:'#9d174d'}:{}}
+              onClick={()=>onNodeClick?.('__TOGGLE_TRAFFIC__')}>
+              {showTraffic?'📡 Hide Traffic':'📡 Show Traffic'}
+            </button>
+            <button className={`isis-path-sel-btn ${showHighTrafficOnly?'cost-on':''}`}
+              style={showHighTrafficOnly
+                ?{background:'#fef2f2',borderColor:'#dc2626',color:'#dc2626'}
+                :{borderColor:'#fca5a5',color:'#dc2626'}}
+              onClick={()=>onNodeClick?.('__TOGGLE_HIGH_TRAFFIC__')}
+              title="Hanya tampilkan badge traffic dengan utilization ≥ 50%">
+              {showHighTrafficOnly?'🔴 All Traffic':'🔴 Higher Traffic Only'}
+            </button>
+          </>
+        )}
         <button className="isis-path-sel-btn" onClick={downloadPNG}
           style={{color:'#16a34a',borderColor:'#bbf7d0'}}>📥 PNG</button>
       </div>
@@ -877,6 +935,74 @@ function EditablePathTopology({
               {hovDesc && renderTip('desc-hover',hovDesc,false)}
             </>
           })()}
+
+          {/* ── Traffic badges ── */}
+          {showTraffic&&(()=>{
+            const seen=new Set()
+            return Object.entries(visEdges).map(([key,edge])=>{
+              if(seen.has(key)) return null; seen.add(key)
+              if((selectedPath!==null||selectedMetric!==null)&&!activeEdgeKeys.has(key)) return null
+              const pa=pos[edge.a], pb=pos[edge.b]; if(!pa||!pb) return null
+              const {x1,y1,x2,y2}=shortenLine(pa.x,pa.y,pb.x,pb.y)
+              const mx=(x1+x2)/2, my=(y1+y2)/2
+
+              // Lookup entry (bidirectional)
+              const trf = trafficMap[`${edge.a}__${edge.b}`] || trafficMap[`${edge.b}__${edge.a}`]
+
+              // swap: label A→Z pakai z_a sensor, label Z→A pakai a_z sensor
+              const az_kbps = trf ? trf.za_kbps : null
+              const za_kbps = trf ? trf.az_kbps : null
+
+              const cap = trf?.capacity_gbps || 0
+
+              // Hitung utilization per arah
+              const utilAZ = (cap && az_kbps !== null) ? (az_kbps / (cap * 1_000_000) * 100) : null
+              const utilZA = (cap && za_kbps !== null) ? (za_kbps / (cap * 1_000_000) * 100) : null
+
+              // "Higher Traffic Only": hanya tampilkan baris dengan traffic lebih tinggi
+              const rows = []
+              const rowCol = u => u===null?'#6b7280': u>=80?'#dc2626': u>=50?'#d97706':'#16a34a'
+              if (!showHighTrafficOnly || (az_kbps??-1) >= (za_kbps??-1))
+                rows.push({ lbl:'A→Z', val:fmtKbps(az_kbps), pct: utilAZ!==null?utilAZ.toFixed(1)+'%':'', col:rowCol(utilAZ) })
+              if (!showHighTrafficOnly || (za_kbps??-1) > (az_kbps??-1))
+                rows.push({ lbl:'Z→A', val:fmtKbps(za_kbps), pct: utilZA!==null?utilZA.toFixed(1)+'%':'', col:rowCol(utilZA) })
+
+              // Dimensi: compact, border tipis, cap di dalam border
+              const ROW_H = 18, PAD = 4, BW = 116
+              const CAP_H = cap>0 ? 14 : 0
+              const BH = PAD*2 + rows.length*ROW_H + (rows.length>1 ? 1 : 0) + CAP_H
+              const x0 = mx-BW/2, y0 = my-BH/2
+
+              // Border warna sesuai utilization tertinggi, background selalu biru muda
+              const maxUtil2 = Math.max(utilAZ??0, utilZA??0)
+              const bdCol2 = maxUtil2>=80?'#dc2626': maxUtil2>=50?'#d97706': maxUtil2>0?'#16a34a':'#9ca3af'
+
+              return (
+                <g key={`trf-${key}`} style={{pointerEvents:'none'}}>
+                  <rect x={x0+1.5} y={y0+1.5} width={BW} height={BH} rx="5" fill="rgba(0,0,0,0.07)"/>
+                  <rect x={x0} y={y0} width={BW} height={BH} rx="5"
+                    fill="#e0f2fe" stroke={bdCol2} strokeWidth="1.2"/>
+                  {rows.map((r, i) => {
+                    const ry = y0 + PAD + i*ROW_H + ROW_H/2
+                    return (
+                      <g key={r.lbl}>
+                        {i>0&&<line x1={x0+4} x2={x0+BW-4} y1={y0+PAD+i*ROW_H-1} y2={y0+PAD+i*ROW_H-1} stroke="#bae6fd" strokeWidth="0.8"/>}
+                        <text x={x0+7}    y={ry} dominantBaseline="middle" fontSize="8" fill="#0369a1" fontWeight="700">{r.lbl}</text>
+                        <text x={x0+50}   y={ry} dominantBaseline="middle" fontSize="9" fill={r.col}   fontWeight="800" textAnchor="middle">{r.val}</text>
+                        <text x={x0+BW-5} y={ry} dominantBaseline="middle" fontSize="8" fill={r.col}   fontWeight="700" textAnchor="end">{r.pct}</text>
+                      </g>
+                    )
+                  })}
+                  {cap>0&&(
+                    <>
+                      <line x1={x0+4} x2={x0+BW-4} y1={y0+BH-CAP_H} y2={y0+BH-CAP_H} stroke="#bae6fd" strokeWidth="0.8"/>
+                      <text x={mx} y={y0+BH-CAP_H/2} dominantBaseline="middle" textAnchor="middle" fontSize="7.5" fill="#0369a1">cap {cap}G</text>
+                    </>
+                  )}
+                </g>
+              )
+            })
+          })()}
         </svg>
       </div>
 
@@ -1232,7 +1358,7 @@ function SimPathCard({ p, origPaths, expandedPath, setExpandedPath }) {
 }
 
 // ─── Path Compare Section ──────────────────────────────────────────────────────
-function PathCompareSection({ src, dst, origPaths, simPaths, origNodes, origEdges, simNodes, simEdges, diff, showCost, showIPs, wanData={}, showIntf=false, showDesc=false, showCap=false }) {
+function PathCompareSection({ src, dst, origPaths, simPaths, origNodes, origEdges, simNodes, simEdges, diff, showCost, showIPs, wanData={}, showIntf=false, showDesc=false, showCap=false, showAllLinks=false, trafficData=null, showTraffic=false, showHighTrafficOnly=false, layoutVersion=0 }) {
   const [origSelectedPath, setOrigSelectedPath] = useState(null)
   const [simSelectedPath,  setSimSelectedPath]  = useState(null)
   const emptyDiff = { addedNodes:[], removedNodes:[], addedEdges:[], removedEdges:[], changedEdges:{} }
@@ -1333,7 +1459,7 @@ function PathCompareSection({ src, dst, origPaths, simPaths, origNodes, origEdge
             onNodeClick={handleOrigNodeClick}
             selectedPath={origSelectedPath}
             showCost={showCost} showIPs={showIPs}
-            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap} showAllLinks={showAllLinks} layoutVersion={layoutVersion}
+            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap} showAllLinks={showAllLinks} trafficData={trafficData} showTraffic={showTraffic} showHighTrafficOnly={showHighTrafficOnly} layoutVersion={layoutVersion}
             origNodeCount={Object.keys(origNodes).length}
           />
         </div>
@@ -1365,7 +1491,7 @@ function PathCompareSection({ src, dst, origPaths, simPaths, origNodes, origEdge
             onNodeClick={handleSimNodeClick}
             selectedPath={simSelectedPath}
             showCost={showCost} showIPs={showIPs}
-            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap} showAllLinks={showAllLinks} layoutVersion={layoutVersion}
+            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap} showAllLinks={showAllLinks} trafficData={trafficData} showTraffic={showTraffic} showHighTrafficOnly={showHighTrafficOnly} layoutVersion={layoutVersion}
             origNodeCount={Object.keys(origNodes).length}
           />
         </div>
@@ -1410,7 +1536,36 @@ export default function LSDBSimulator() {
   const [showIntf,       setShowIntf]       = useState(false)
   const [showDesc,       setShowDesc]       = useState(false)
   const [showCap,        setShowCap]        = useState(false)
-  const [showAllLinks,   setShowAllLinks]   = useState(false)
+  const [showAllLinks,        setShowAllLinks]        = useState(false)
+  const [showTraffic,         setShowTraffic]         = useState(false)
+  const [showHighTrafficOnly, setShowHighTrafficOnly] = useState(false)
+  const [trafficData,    setTrafficData]    = useState(null)   // null = belum pernah fetch
+  const [trafficCountdown, setTrafficCountdown] = useState(0) // detik countdown
+  const TRAFFIC_URL     = 'https://rnims.lintasarta.net/api/dashboard/metro'   // proxy Django → rnims.lintasarta.net
+  const TRAFFIC_REFRESH = 180 // detik
+
+  // Fetch traffic data via Django proxy (pakai JWT auth Django)
+  const fetchTraffic = useCallback(async () => {
+    try {
+      const r = await fetch(TRAFFIC_URL, { headers: { Authorization: `Bearer ${token()}` } })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const json = await r.json()
+      setTrafficData(json.data?.metro_list || [])
+      setTrafficCountdown(TRAFFIC_REFRESH)
+    } catch (err) {
+      console.warn('[Traffic] fetch error:', err)
+      setTrafficCountdown(TRAFFIC_REFRESH)
+    }
+  }, [])
+
+  // Auto-fetch setiap 3 menit + countdown per detik
+  useEffect(() => {
+    fetchTraffic()                              // fetch pertama saat mount
+    const refreshTimer = setInterval(fetchTraffic, TRAFFIC_REFRESH * 1000)
+    const countTimer   = setInterval(() => setTrafficCountdown(c => Math.max(0, c - 1)), 1000)
+    return () => { clearInterval(refreshTimer); clearInterval(countTimer) }
+  }, [fetchTraffic])
+
   const [layoutVersion,  setLayoutVersion]  = useState(0)
   const [layoutMsg,      setLayoutMsg]      = useState('')  // feedback singkat
   const LS_KEY = 'lsdb-node-positions'
@@ -1534,8 +1689,39 @@ export default function LSDBSimulator() {
   },[simNodes,simEdges])
 
   const findPaths = (overrideSrc, overrideDst) => {
-    const s = overrideSrc ?? src
-    const d = overrideDst ?? dst
+    // Guard: onClick meneruskan SyntheticEvent sebagai arg pertama — pastikan hanya string yang dipakai
+    const s = typeof overrideSrc === 'string' ? overrideSrc : src
+    const d = typeof overrideDst === 'string' ? overrideDst : dst
+    // DEBUG — buka console browser, ketik: window._dbg(src, dst)
+    window._dbg_edges = simEdges
+    window._dbg_nodes = simNodes
+    window._dbg = (a, b) => {
+      const edgesOf = n => Object.entries(simEdges).filter(([k])=>k.includes(n)).map(([k,e])=>`${e.a}↔${e.b} m=${e.metric}`)
+      console.log('Edges of', a, ':', edgesOf(a))
+      console.log('Edges of', b, ':', edgesOf(b))
+      console.log('Node', a, 'exists:', !!simNodes[a])
+      console.log('Node', b, 'exists:', !!simNodes[b])
+      // BFS: apakah b bisa dicapai dari a?
+      const adj = {}
+      for (const n of Object.keys(simNodes)) adj[n] = []
+      for (const edge of Object.values(simEdges)) {
+        if (adj[edge.a] !== undefined) adj[edge.a].push(edge.b)
+        if (adj[edge.b] !== undefined) adj[edge.b].push(edge.a)
+      }
+      const visited = new Set([a])
+      const queue = [a]
+      while (queue.length) {
+        const cur = queue.shift()
+        if (cur === b) { console.log(`✅ BFS: ADA path dari ${a} ke ${b}`); return }
+        for (const nb of (adj[cur]||[])) {
+          if (!visited.has(nb)) { visited.add(nb); queue.push(nb) }
+        }
+      }
+      console.log(`❌ BFS: TIDAK ADA path dari ${a} ke ${b}. Komponen ${a} punya ${visited.size} node.`)
+      // Tampilkan node yang paling dekat ke b
+      const bNeighbors = edgesOf(b).map(s=>s.split('↔').find(x=>x!==b&&x!==` m`))
+      console.log('Neighbor SINEQ3HW01 yang ada di graph:', bNeighbors.filter(n=>visited.has(n)))
+    }
     setPathErr('')
     if (!s||!d){setPathErr('Pilih source dan destination');return}
     if (s===d){setPathErr('Source dan destination tidak boleh sama');return}
@@ -1653,8 +1839,16 @@ export default function LSDBSimulator() {
     if (signal==='__TOGGLE_IP__')   { setShowIPs(v=>!v); return }
     if (signal==='__TOGGLE_INTF__') { setShowIntf(v=>!v); return }
     if (signal==='__TOGGLE_DESC__') { setShowDesc(v=>!v); return }
-    if (signal==='__TOGGLE_CAP__')       { setShowCap(v=>!v); return }
-    if (signal==='__TOGGLE_ALL_LINKS__') { setShowAllLinks(v=>!v); return }
+    if (signal==='__TOGGLE_CAP__')          { setShowCap(v=>!v); return }
+    if (signal==='__TOGGLE_ALL_LINKS__')    { setShowAllLinks(v=>!v); return }
+    if (signal==='__TOGGLE_TRAFFIC__')      { setShowTraffic(v=>!v); return }
+    if (signal==='__TOGGLE_HIGH_TRAFFIC__') {
+      setShowHighTrafficOnly(v => {
+        if (!v) setShowTraffic(true)  // aktifkan traffic otomatis saat Higher Traffic Only dinyalakan
+        return !v
+      })
+      return
+    }
     // addLink mode: node clicked
     if (editMode==='addLink') {
       if (!addLinkSrc) setAddLinkSrc(signal)
@@ -1684,6 +1878,23 @@ export default function LSDBSimulator() {
         <span className="sim-topbar-counts">
           🖧 sim <strong>{Object.keys(simNodes).length}</strong> / orig <strong>{Object.keys(origNodes).length}</strong> router
         </span>
+        {/* Traffic countdown */}
+        {trafficData!==null&&(
+          <span style={{fontSize:11,color:'#6b7280',display:'flex',alignItems:'center',gap:5}}>
+            <span style={{
+              width:8,height:8,borderRadius:'50%',display:'inline-block',flexShrink:0,
+              background: trafficCountdown>30?'#22c55e':trafficCountdown>10?'#f59e0b':'#ef4444',
+              boxShadow: trafficCountdown>30?'0 0 5px #22c55e':'0 0 5px #f59e0b',
+            }}/>
+            Traffic refresh dalam{' '}
+            <strong style={{color:'#374151',fontVariantNumeric:'tabular-nums'}}>
+              {String(Math.floor(trafficCountdown/60)).padStart(2,'0')}:{String(trafficCountdown%60).padStart(2,'0')}
+            </strong>
+            <button style={{fontSize:10,padding:'1px 6px',border:'1px solid #d1d5db',borderRadius:4,
+              background:'#f9fafb',cursor:'pointer',color:'#374151',lineHeight:'16px'}}
+              onClick={fetchTraffic} title="Refresh sekarang">↺</button>
+          </span>
+        )}
         <div className="sim-topbar-right">
           <button className={`sim-tool-btn ${showCompare?'sim-tool-btn--active':''}`}
             style={showCompare?{background:'#eef2ff',borderColor:'#4858c8',color:'#4858c8'}:{}}
@@ -1744,7 +1955,7 @@ export default function LSDBSimulator() {
             <input type="number" min={1} max={10} value={k}
               onChange={e=>setK(Math.min(10,Math.max(1,Number(e.target.value))))}/>
           </div>
-          <button className="isis-btn isis-btn--primary isis-btn--find" onClick={findPaths}>
+          <button className="isis-btn isis-btn--primary isis-btn--find" onClick={() => findPaths()}>
             🔍 Find Paths
           </button>
           <div style={{display:'flex',gap:6,marginLeft:8,alignItems:'center'}}>
@@ -1796,7 +2007,7 @@ export default function LSDBSimulator() {
             onNodeClick={handleNodeClick}
             selectedPath={selectedPath} selectedMetric={selectedMetric}
             showCost={showCost} showIPs={showIPs}
-            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap} showAllLinks={showAllLinks} layoutVersion={layoutVersion}
+            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap} showAllLinks={showAllLinks} trafficData={trafficData} showTraffic={showTraffic} showHighTrafficOnly={showHighTrafficOnly} layoutVersion={layoutVersion}
             origNodeCount={Object.keys(origNodes).length}
           />
 
@@ -1817,7 +2028,7 @@ export default function LSDBSimulator() {
               simNodes={simNodes} simEdges={simEdges}
               diff={diff}
               showCost={showCost} showIPs={showIPs}
-              wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap} showAllLinks={showAllLinks} layoutVersion={layoutVersion}
+              wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap} showAllLinks={showAllLinks} trafficData={trafficData} showTraffic={showTraffic} showHighTrafficOnly={showHighTrafficOnly} layoutVersion={layoutVersion}
             />
           )}
         </div>

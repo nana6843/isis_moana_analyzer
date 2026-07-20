@@ -163,7 +163,7 @@ class FindPathsView(APIView):
     Optimized: paths dibatasi max_cost = shortest * 2.5 agar tidak lambat.
     """
     permission_classes = [IsAuthenticated]
-
+    #permission_classes = [AllowAny]
     def get(self, request):
         src    = request.query_params.get('src', '').strip()
         dst    = request.query_params.get('dst', '').strip()

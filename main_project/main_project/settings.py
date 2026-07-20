@@ -11,10 +11,11 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
-
+import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+from dotenv import load_dotenv          # ← tambah ini
+load_dotenv(Path(__file__).resolve().parent.parent.parent / '.env')  # ← dan ini
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -81,9 +82,39 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    },
+
+        # Database kedua — primbon2 (app1_ip_add_wan, dll.)
+    'primbon2': {
+        'ENGINE':   'django.db.backends.mysql',
+        'NAME':     os.environ.get('DB_NAME_WAN', 'primbon2'),
+        'USER':     os.environ.get('DB_USER', ''),
+        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+        'HOST':     os.environ.get('DB_HOST', ''),
+        'PORT':     os.environ.get('DB_PORT', '3306'),
+        'OPTIONS':  {
+                 'charset': 'utf8mb4',
+             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+         },
+    },
 }
 
+
+# Router yang mengarahkan model IpAddWan ke database primbon2
+DATABASE_ROUTERS = ['isis_analyzer.db_router.PrimbonRouter']
+
+AUTHENTICATION_BACKENDS = [
+    'main_project.ldap_backend.LDAPBackend',   # coba LDAP dulu
+    'django.contrib.auth.backends.ModelBackend', # fallback local (untuk superuser)
+]
+ 
+LDAP_CONFIG = {
+    'SERVER':        os.environ.get('LDAP_SERVER',        '10.24.19.111'),
+    'PORT':          int(os.environ.get('LDAP_PORT',      '389')),
+    'BIND_DN':       os.environ.get('LDAP_BIND_DN',       'ticketnms,OU=Other,OU=Department,DC=ladomain,DC=lintasarta,DC=co,DC=id'),
+    'BIND_PASSWORD': os.environ.get('LDAP_BIND_PASSWORD', 'Pzf47y8cxf6t'),
+    'BASE_DN':       os.environ.get('LDAP_BASE_DN',       'DC=ladomain,DC=lintasarta,DC=co,DC=id'),
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
