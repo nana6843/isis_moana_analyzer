@@ -157,16 +157,35 @@ function EditablePathTopology({
   onNodeDelete, onEdgeClick, onNodeClick,
   selectedPath, selectedMetric=null, showCost, showIPs,
   wanData={}, showIntf=false, showDesc=false, showCap=false,
+  showAllLinks=false,
+  layoutVersion=0,
   origNodeCount=0,
 }) {
-  const [posOverride, setPosOverride] = useState({})
+  const LS_KEY = 'lsdb-node-positions'
+  const [posOverride, setPosOverride] = useState(() => {
+    try { const s=localStorage.getItem(LS_KEY); return s?JSON.parse(s):{} } catch { return {} }
+  })
   const [dragging, setDragging]       = useState(null)
   const [hovNode, setHovNode]         = useState(null)
   const [hovEdge, setHovEdge]         = useState(null)
   const [hovDesc, setHovDesc]         = useState(null)   // {descA, descB, edgeA, edgeB, x, y}
   const [pinnedDescs, setPinnedDescs] = useState({})    // key -> {descA, descB, edgeA, edgeB, x, y}
   const [pinnedEdges, setPinnedEdges] = useState(new Set())
-  const svgRef = useRef()
+  const svgRef    = useRef()
+  const fileRef   = useRef()
+  const saveTimer = useRef()
+
+  // Auto-save posOverride ke localStorage (debounced 800ms)
+  useEffect(() => {
+    if (readOnly) return
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      try { localStorage.setItem(LS_KEY, JSON.stringify(posOverride)) } catch {}
+    }, 800)
+    return () => clearTimeout(saveTimer.current)
+  }, [posOverride, readOnly])
+
+  // layoutVersion dipakai sebagai key={} di parent → component remount otomatis membaca ulang localStorage
 
   const displayPaths = useMemo(() => {
     if (selectedPath !== null) return [simPaths[selectedPath]]
@@ -314,20 +333,35 @@ function EditablePathTopology({
     return c
   }, [simNodes, simEdges])
 
-  // Drag
+  // Dynamic viewBox — expands to fit all actual node positions regardless of saved coords
+  const fitVB = useMemo(() => {
+    const pts = Object.values(pos)
+    if (!pts.length) return { x:0, y:0, w:W, h:H }
+    const PAD = 100
+    const minX = Math.min(...pts.map(p=>p.x)) - NW/2 - PAD
+    const minY = Math.min(...pts.map(p=>p.y)) - NH/2 - PAD
+    const maxX = Math.max(...pts.map(p=>p.x)) + NW/2 + PAD
+    const maxY = Math.max(...pts.map(p=>p.y)) + NH/2 + PAD
+    return { x:minX, y:minY, w:maxX-minX, h:maxY-minY }
+  }, [pos, W, H])
+  const fitVBRef = useRef(fitVB)
+  fitVBRef.current = fitVB
+
+  // Drag — uses fitVB for accurate screen→SVG coordinate conversion
   const startDrag = useCallback((e, hostname) => {
     if (editMode==='addLink') return
     e.stopPropagation()
     if (!svgRef.current) return
     const rect = svgRef.current.getBoundingClientRect()
-    const sx=W/rect.width, sy=H/rect.height
+    const { x:vbX, y:vbY, w:vbW, h:vbH } = fitVBRef.current
+    const sx=vbW/rect.width, sy=vbH/rect.height
     const p=pos[hostname]
-    setDragging({ node:hostname, ox:(e.clientX-rect.left)*sx-p.x, oy:(e.clientY-rect.top)*sy-p.y, sx, sy, rect })
-  }, [editMode, W, H, pos])
+    setDragging({ node:hostname, ox:(e.clientX-rect.left)*sx+vbX-p.x, oy:(e.clientY-rect.top)*sy+vbY-p.y, sx, sy, vbX, vbY, rect })
+  }, [editMode, pos])
   const onMouseMove = useCallback(e => {
     if (!dragging) return
-    const { node, ox, oy, sx, sy, rect } = dragging
-    setPosOverride(prev => ({ ...prev, [node]: { x:(e.clientX-rect.left)*sx-ox, y:(e.clientY-rect.top)*sy-oy } }))
+    const { node, ox, oy, sx, sy, vbX, vbY, rect } = dragging
+    setPosOverride(prev => ({ ...prev, [node]: { x:(e.clientX-rect.left)*sx+vbX-ox, y:(e.clientY-rect.top)*sy+vbY-oy } }))
   }, [dragging])
 
   const togglePin = key => setPinnedEdges(prev => {
@@ -431,6 +465,11 @@ function EditablePathTopology({
           </button>
         ))}
         <span className="isis-path-sel-divider"/>
+        <button className={`isis-path-sel-btn ${showAllLinks?'cost-on':''}`}
+          style={showAllLinks?{background:'#e0f2fe',borderColor:'#0284c7',color:'#0369a1'}:{}}
+          onClick={()=>onNodeClick?.('__TOGGLE_ALL_LINKS__')}>
+          {showAllLinks?'🕸 Hide All Links':'🕸 All Links'}
+        </button>
         <button className={`isis-path-sel-btn isis-cost-toggle ${showCost?'cost-on':''}`}
           onClick={()=>onNodeClick?.('__TOGGLE_COST__')}>{showCost?'📊 Hide Cost':'📊 Show Cost'}</button>
         <button className={`isis-path-sel-btn isis-ip-toggle ${showIPs?'ip-on':''}`}
@@ -450,7 +489,8 @@ function EditablePathTopology({
 
       {/* SVG */}
       <div className="isis-path-topo-scroll">
-        <svg ref={svgRef} width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+        <svg ref={svgRef} width={fitVB.w} height={fitVB.h}
+          viewBox={`${fitVB.x} ${fitVB.y} ${fitVB.w} ${fitVB.h}`}
           className="isis-path-topo-svg"
           style={{userSelect:'none', cursor:dragging?'grabbing':editMode==='addLink'?'crosshair':'default',
                   display:'block', minWidth:'100%'}}
@@ -463,10 +503,19 @@ function EditablePathTopology({
             ))}
           </defs>
 
-          {/* Background edges */}
+          {/* Background edges — normal mode: gray; all-links mode: plain colored lines */}
           {Object.entries(visEdges).map(([key,edge])=>{
             const pa=pos[edge.a], pb=pos[edge.b]; if(!pa||!pb) return null
             const {x1,y1,x2,y2}=shortenLine(pa.x,pa.y,pb.x,pb.y)
+            if (showAllLinks) {
+              // All Links mode: semua edge tampil sebagai garis solid tanpa arrow
+              const isChanged=!!diff?.changedEdges?.[key]
+              const isAdded=diff?.addedEdges?.includes(key)
+              const stroke=isChanged?'#f59e0b':isAdded?'#16a34a':'#93c5fd'
+              const sw=isChanged||isAdded?2.5:2
+              return <line key={`bg-${key}`} x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke={stroke} strokeWidth={sw} strokeLinecap="round" opacity="0.85"/>
+            }
             const isChanged=!!diff?.changedEdges?.[key]
             const isAdded=diff?.addedEdges?.includes(key)
             let stroke='#dde3ef',sw=5,dash
@@ -476,8 +525,8 @@ function EditablePathTopology({
               stroke={stroke} strokeWidth={sw} strokeDasharray={dash} strokeLinecap="round"/>
           })}
 
-          {/* Path edges */}
-          {displayPaths.map((p,dpi)=>{
+          {/* Path edges — disembunyikan di all-links mode */}
+          {!showAllLinks&&displayPaths.map((p,dpi)=>{
             const pi=selectedPath!==null?selectedPath:dpi
             const color=PATH_COLORS[pi%PATH_COLORS.length]
             const dash=PATH_DASH[pi%PATH_DASH.length]
@@ -656,7 +705,7 @@ function EditablePathTopology({
             const lb=nd.router_ips?.[0]
             const nc    = neighborCounts[hostname] ?? 0       // visible neighbors
             const ncMax = totalNeighborCounts[hostname] ?? 0  // total in sim graph
-            const fill=isSrc?'#16a34a':isDst?'#dc2626':isAdded?'#16a34a':'#4858c8'
+            const fill=showAllLinks?'#4858c8':isSrc?'#16a34a':isDst?'#dc2626':isAdded?'#16a34a':'#4858c8'
             const stroke=isLinkSrc?'#f59e0b':'white'
             const sw=isLinkSrc?3:1.5
 
@@ -1274,7 +1323,7 @@ function PathCompareSection({ src, dst, origPaths, simPaths, origNodes, origEdge
             <span className="sim-compare-topo-label sim-compare-topo-label--orig">ORIGINAL</span>
             Topologi Original ({src} → {dst})
           </div>
-          <EditablePathTopology
+          <EditablePathTopology key={`orig-${layoutVersion}`}
             simPaths={origPaths} src={src} dst={dst}
             simNodes={origNodes} simEdges={origEdges} origEdges={origEdges}
             diff={emptyDiff}
@@ -1284,7 +1333,7 @@ function PathCompareSection({ src, dst, origPaths, simPaths, origNodes, origEdge
             onNodeClick={handleOrigNodeClick}
             selectedPath={origSelectedPath}
             showCost={showCost} showIPs={showIPs}
-            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap}
+            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap} showAllLinks={showAllLinks} layoutVersion={layoutVersion}
             origNodeCount={Object.keys(origNodes).length}
           />
         </div>
@@ -1306,7 +1355,7 @@ function PathCompareSection({ src, dst, origPaths, simPaths, origNodes, origEdge
               </span>
             )}
           </div>
-          <EditablePathTopology
+          <EditablePathTopology key={`sim-cmp-${layoutVersion}`}
             simPaths={simPaths} src={src} dst={dst}
             simNodes={simNodes} simEdges={simEdges} origEdges={origEdges}
             diff={diff||emptyDiff}
@@ -1316,7 +1365,7 @@ function PathCompareSection({ src, dst, origPaths, simPaths, origNodes, origEdge
             onNodeClick={handleSimNodeClick}
             selectedPath={simSelectedPath}
             showCost={showCost} showIPs={showIPs}
-            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap}
+            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap} showAllLinks={showAllLinks} layoutVersion={layoutVersion}
             origNodeCount={Object.keys(origNodes).length}
           />
         </div>
@@ -1361,6 +1410,62 @@ export default function LSDBSimulator() {
   const [showIntf,       setShowIntf]       = useState(false)
   const [showDesc,       setShowDesc]       = useState(false)
   const [showCap,        setShowCap]        = useState(false)
+  const [showAllLinks,   setShowAllLinks]   = useState(false)
+  const [layoutVersion,  setLayoutVersion]  = useState(0)
+  const [layoutMsg,      setLayoutMsg]      = useState('')  // feedback singkat
+  const LS_KEY = 'lsdb-node-positions'
+
+  const showLayoutMsg = msg => {
+    setLayoutMsg(msg)
+    setTimeout(() => setLayoutMsg(''), 2500)
+  }
+
+  const saveLayout = () => {
+    const name = window.prompt('Nama file layout:', 'topology-layout')
+    if (name === null) return  // user cancel
+    const filename = (name.trim() || 'topology-layout') + '.json'
+    try {
+      const positions = JSON.parse(localStorage.getItem(LS_KEY) || '{}')
+      // Sertakan src/dst agar saat load tidak perlu ketik ulang
+      const payload = { positions, src, dst }
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'})
+      Object.assign(document.createElement('a'),
+        {href:URL.createObjectURL(blob), download:filename}).click()
+      showLayoutMsg(`✓ Tersimpan sebagai ${filename}`)
+    } catch { alert('Gagal export layout') }
+  }
+  const loadLayoutFile = e => {
+    const file = e.target.files?.[0]; if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result)
+        if (typeof data !== 'object' || Array.isArray(data)) {
+          alert('Format file tidak valid'); return
+        }
+        // Support format baru { positions, src, dst } dan format lama (langsung positions)
+        const positions = data.positions ?? data
+        localStorage.setItem(LS_KEY, JSON.stringify(positions))
+        setLayoutVersion(v => v + 1)
+        // Restore src/dst kalau ada, lalu auto-trigger find paths
+        const loadedSrc = data.src || ''
+        const loadedDst = data.dst || ''
+        if (loadedSrc) setSrc(loadedSrc)
+        if (loadedDst) setDst(loadedDst)
+        showLayoutMsg(`✓ Layout "${file.name}" dimuat${loadedSrc ? ` (${loadedSrc} → ${loadedDst})` : ''}`)
+        // Auto find paths — pakai nilai dari file langsung (state belum ter-apply)
+        if (loadedSrc && loadedDst) findPaths(loadedSrc, loadedDst)
+      } catch { alert('File tidak valid / bukan JSON') }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+  const resetLayout = () => {
+    if (!confirm('Reset semua posisi node ke auto-layout?')) return
+    localStorage.removeItem(LS_KEY)
+    setLayoutVersion(v => v + 1)
+    showLayoutMsg('✓ Layout direset ke auto')
+  }
   const [expandedPath,   setExpandedPath]   = useState(null)
   const [showCompare,    setShowCompare]    = useState(false)
   const [editMode,       setEditMode]       = useState('select')
@@ -1428,10 +1533,12 @@ export default function LSDBSimulator() {
     setSimPaths(yenKSP(simNodes,simEdges,src,dst,k))
   },[simNodes,simEdges])
 
-  const findPaths = () => {
+  const findPaths = (overrideSrc, overrideDst) => {
+    const s = overrideSrc ?? src
+    const d = overrideDst ?? dst
     setPathErr('')
-    if (!src||!dst){setPathErr('Pilih source dan destination');return}
-    if (src===dst){setPathErr('Source dan destination tidak boleh sama');return}
+    if (!s||!d){setPathErr('Pilih source dan destination');return}
+    if (s===d){setPathErr('Source dan destination tidak boleh sama');return}
     // Freeze currently visible topology nodes so they persist when src/dst changes
     if (hasSearched) {
       setExtraVisibleNodes(prev => {
@@ -1441,8 +1548,8 @@ export default function LSDBSimulator() {
         return next
       })
     }
-    const sp=yenKSP(simNodes,simEdges,src,dst,k)
-    const op=yenKSP(origNodes,origEdges,src,dst,k)
+    const sp=yenKSP(simNodes,simEdges,s,d,k)
+    const op=yenKSP(origNodes,origEdges,s,d,k)
     setSimPaths(sp); setOrigPaths(op)
     setHasSearched(true); setSelectedPath(null); setSelectedMetric(null); setExpandedPath(null)
     if (!sp.length) setPathErr('Tidak ada path ditemukan di topologi simulasi')
@@ -1546,7 +1653,8 @@ export default function LSDBSimulator() {
     if (signal==='__TOGGLE_IP__')   { setShowIPs(v=>!v); return }
     if (signal==='__TOGGLE_INTF__') { setShowIntf(v=>!v); return }
     if (signal==='__TOGGLE_DESC__') { setShowDesc(v=>!v); return }
-    if (signal==='__TOGGLE_CAP__')  { setShowCap(v=>!v); return }
+    if (signal==='__TOGGLE_CAP__')       { setShowCap(v=>!v); return }
+    if (signal==='__TOGGLE_ALL_LINKS__') { setShowAllLinks(v=>!v); return }
     // addLink mode: node clicked
     if (editMode==='addLink') {
       if (!addLinkSrc) setAddLinkSrc(signal)
@@ -1639,6 +1747,28 @@ export default function LSDBSimulator() {
           <button className="isis-btn isis-btn--primary isis-btn--find" onClick={findPaths}>
             🔍 Find Paths
           </button>
+          <div style={{display:'flex',gap:6,marginLeft:8,alignItems:'center'}}>
+            <button className="sim-tool-btn" onClick={saveLayout}
+              style={{color:'#0369a1',borderColor:'#bae6fd',fontSize:11,padding:'4px 10px'}}>
+              💾 Save Layout
+            </button>
+            <label htmlFor="lsdb-layout-file"
+              className="sim-tool-btn"
+              style={{color:'#0369a1',borderColor:'#bae6fd',fontSize:11,padding:'4px 10px',cursor:'pointer',margin:0}}>
+              📂 Load Layout
+            </label>
+            <input id="lsdb-layout-file" type="file" accept=".json"
+              style={{display:'none'}} onChange={loadLayoutFile}/>
+            <button className="sim-tool-btn" onClick={resetLayout}
+              style={{color:'#dc2626',borderColor:'#fecaca',fontSize:11,padding:'4px 10px'}}>
+              🗑 Reset Layout
+            </button>
+            {layoutMsg&&(
+              <span style={{fontSize:11,color:'#15803d',fontWeight:500,marginLeft:4}}>
+                {layoutMsg}
+              </span>
+            )}
+          </div>
         </div>
         {pathErr&&<div className="isis-error">{pathErr}</div>}
       </div>
@@ -1654,7 +1784,7 @@ export default function LSDBSimulator() {
           </div>
 
           {/* Sim editable topology */}
-          <EditablePathTopology
+          <EditablePathTopology key={`sim-main-${layoutVersion}`}
             simPaths={simPaths} src={src} dst={dst}
             simNodes={simNodes} simEdges={simEdges} origEdges={origEdges}
             diff={diff}
@@ -1666,7 +1796,7 @@ export default function LSDBSimulator() {
             onNodeClick={handleNodeClick}
             selectedPath={selectedPath} selectedMetric={selectedMetric}
             showCost={showCost} showIPs={showIPs}
-            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap}
+            wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap} showAllLinks={showAllLinks} layoutVersion={layoutVersion}
             origNodeCount={Object.keys(origNodes).length}
           />
 
@@ -1687,7 +1817,7 @@ export default function LSDBSimulator() {
               simNodes={simNodes} simEdges={simEdges}
               diff={diff}
               showCost={showCost} showIPs={showIPs}
-              wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap}
+              wanData={wanData} showIntf={showIntf} showDesc={showDesc} showCap={showCap} showAllLinks={showAllLinks} layoutVersion={layoutVersion}
             />
           )}
         </div>
